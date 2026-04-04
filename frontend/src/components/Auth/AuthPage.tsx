@@ -83,7 +83,7 @@ export default function AuthPage({ mode, onLogin, onShowToast }: AuthPageProps) 
     }
 
     if (!loginPassword) {
-      nextErrors.loginPassword = 'Passcode is required';
+      nextErrors.loginPassword = 'Password is required';
     }
 
     if (Object.keys(nextErrors).length) {
@@ -129,11 +129,11 @@ export default function AuthPage({ mode, onLogin, onShowToast }: AuthPageProps) 
     }
 
     if (signupPassword.length < 8 || !/[A-Z]/.test(signupPassword)) {
-      nextErrors.signupPassword = 'Use at least 8 chars with one uppercase letter';
+      nextErrors.signupPassword = 'Min 8 chars with at least one uppercase letter';
     }
 
     if (signupPassword !== signupConfirmPassword) {
-      nextErrors.signupConfirmPassword = 'Entries do not match';
+      nextErrors.signupConfirmPassword = 'Passwords do not match';
     }
 
     if (!signupTerms) {
@@ -464,8 +464,8 @@ export default function AuthPage({ mode, onLogin, onShowToast }: AuthPageProps) 
         {mode === 'forgotOk' && (
           <div className="auth-success">
             <div className="success-icon">📬</div>
-            <h3>Check your inbox</h3>
-            <p>A password reset link has been sent. It expires in 30 minutes.</p>
+            <h3>Request received</h3>
+            <p>If an account exists for that email, the backend has recorded the request. Reset email delivery is not wired yet.</p>
             <button className="auth-btn" type="button" onClick={() => navigate('/login')}>
               <span className="btn-text">Back to Sign In</span>
             </button>

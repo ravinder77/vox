@@ -52,8 +52,8 @@ export default function ChatWindow({
         isEmojiOpen={isEmojiOpen}
         onAddEmoji={addEmoji}
         onChange={setComposerValue}
+        onNotImplemented={showToast}
         onSend={sendMessage}
-        onShowToast={showToast}
         onToggleEmoji={toggleEmoji}
       />
     </main>

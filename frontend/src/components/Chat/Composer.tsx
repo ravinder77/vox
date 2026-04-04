@@ -9,8 +9,8 @@ type ComposerProps = {
   isEmojiOpen: boolean;
   onAddEmoji: (emoji: string) => void;
   onChange: (value: string) => void;
+  onNotImplemented: (message: string) => void;
   onSend: () => void;
-  onShowToast: (message: string) => void;
   onToggleEmoji: () => void;
 };
 
@@ -20,8 +20,8 @@ export default function Composer({
   isEmojiOpen,
   onAddEmoji,
   onChange,
+  onNotImplemented,
   onSend,
-  onShowToast,
   onToggleEmoji,
 }: ComposerProps) {
   const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -57,13 +57,28 @@ export default function Composer({
           <button type="button" className="composer-btn" title="Emoji" onClick={onToggleEmoji}>
             😊
           </button>
-          <button type="button" className="composer-btn" title="Attach file" onClick={() => onShowToast('File picker opened')}>
+          <button
+            type="button"
+            className="composer-btn"
+            title="Attach file"
+            onClick={() => onNotImplemented('File sending is not wired yet')}
+          >
             📎
           </button>
-          <button type="button" className="composer-btn" title="Image" onClick={() => onShowToast('Image picker opened')}>
+          <button
+            type="button"
+            className="composer-btn"
+            title="Image"
+            onClick={() => onNotImplemented('Image sending is not wired yet')}
+          >
             🖼️
           </button>
-          <button type="button" className="composer-btn" title="GIF" onClick={() => onShowToast('GIF picker opened')}>
+          <button
+            type="button"
+            className="composer-btn"
+            title="GIF"
+            onClick={() => onNotImplemented('GIF sending is not wired yet')}
+          >
             GIF
           </button>
           <button type="button" className="send-btn" title="Send" onClick={onSend}>

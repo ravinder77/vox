@@ -12,8 +12,7 @@
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:seed": "prisma db seed"
+    "db:push": "prisma db push"
   },
   "engines": {
     "node": ">=22"

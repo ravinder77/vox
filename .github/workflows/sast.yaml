@@ -13,10 +13,6 @@ concurrency:
 env:
   NODE_VERSION: "24"
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
 # ─────────────────────────────────────────────────────────────────
 # 🔎 SonarQube — Backend
@@ -56,6 +52,7 @@ jobs:
           projectBaseDir: backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       # Block PR if Quality Gate fails
       - name: SonarQube Quality Gate check
@@ -102,6 +99,7 @@ jobs:
           projectBaseDir: frontend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: SonarQube Quality Gate check
         uses: SonarSource/sonarqube-quality-gate-action@v1

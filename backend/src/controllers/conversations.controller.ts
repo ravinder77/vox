@@ -320,7 +320,8 @@ export const getMedia = asyncHandler(async function getMedia(req, res) {
 export const listUsers = asyncHandler(async function listUsers(req, res) {
   const typedReq = req as ApiRequest<any, any, any, { search?: string; conversationId?: string }>;
   const typedRes = res as Response;
-  const search = (typedReq.query.search || '').trim();
+  const rawSearch = (typedReq.query.search || '').trim();
+  const search = rawSearch.replace(/^@+/, '');
   const conversationId = (typedReq.query.conversationId || '').trim();
 
   let participantUserIds = new Set<string>();

@@ -10,6 +10,7 @@ export type User = {
   initials: string;
   role: string;
   status: PresenceStatus;
+  isMember?: boolean;
 };
 
 export type Reaction = {

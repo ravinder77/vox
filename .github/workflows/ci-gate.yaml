@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   gate:
-    name: ✅ CI Pipeline Gate
+    name: CI Pipeline Gate
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate workflow set for this commit

@@ -15,6 +15,7 @@ const user = {
   initials: 'OU',
   role: 'Designer',
   status: 'online' as const,
+  passwordHash: 'hash',
   createdAt: new Date(),
   updatedAt: new Date(),
 };
