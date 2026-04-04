@@ -182,7 +182,7 @@ jobs:
 
   # ── Gate ─────────────────────────────────────────────────────────
   gate:
-    name: ✅ Docker Gate
+    name: Docker Gate
     runs-on: ubuntu-latest
     needs: docker
     if: always()
