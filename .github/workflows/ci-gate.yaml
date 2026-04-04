@@ -1,0 +1,146 @@
+
+# ─────────────────────────────────────────────────────────────────
+name: "CI Pipeline Gate"
+
+on:
+  workflow_run:
+    workflows:
+      - "Secret Scanning"
+      - "SAST — SonarQube & Trivy FS"
+      - "Build & Test"
+      - "Docker → ECR"
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  gate:
+    name: ✅ CI Pipeline Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate workflow set for this commit
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.payload.workflow_run.head_sha;
+            const branch = context.payload.workflow_run.head_branch;
+            const event = context.payload.workflow_run.event;
+            const pollDelayMs = 20000;
+            const maxPolls = 18;
+
+            const requiredWorkflows =
+              event === 'pull_request'
+                ? ['Secret Scanning', 'SAST — SonarQube & Trivy FS', 'Build & Test']
+                : ['Secret Scanning', 'SAST — SonarQube & Trivy FS', 'Build & Test', 'Docker → ECR'];
+
+            const fetchSummary = async () => {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner,
+                repo,
+                head_sha: sha,
+                per_page: 100,
+              });
+
+              return requiredWorkflows.map((workflowName) => {
+                const workflowRuns = runs
+                  .filter((run) => run.name === workflowName && run.head_branch === branch)
+                  .sort((left, right) => new Date(right.created_at) - new Date(left.created_at));
+
+                const latestRun = workflowRuns[0];
+                return {
+                  workflowName,
+                  status: latestRun?.status ?? 'missing',
+                  conclusion: latestRun?.conclusion ?? 'missing',
+                  url: latestRun?.html_url ?? '',
+                };
+              });
+            };
+
+            let summary = await fetchSummary();
+
+            core.info(`Branch: ${branch}`);
+            core.info(`SHA: ${sha}`);
+            core.info(`Event: ${event}`);
+
+            for (let attempt = 1; attempt <= maxPolls; attempt += 1) {
+              const pending = summary.filter(({ status }) => status !== 'completed');
+              if (pending.length === 0) {
+                break;
+              }
+
+              if (attempt === maxPolls) {
+                break;
+              }
+
+              core.info(
+                `Waiting for workflows on ${sha}: ${pending.map(({ workflowName }) => workflowName).join(', ')}.`,
+              );
+              await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
+              summary = await fetchSummary();
+            }
+
+            core.info(JSON.stringify(summary, null, 2));
+
+            const failed = summary.filter(
+              ({ status, conclusion }) =>
+                status === 'completed' && !['success', 'skipped'].includes(conclusion),
+            );
+
+            const pending = summary.filter(
+              ({ status }) => status !== 'completed',
+            );
+
+            core.summary
+              .addHeading(`CI Gate for ${sha}`)
+              .addTable([
+                [
+                  { data: 'Workflow', header: true },
+                  { data: 'Status', header: true },
+                  { data: 'Conclusion', header: true },
+                ],
+                ...summary.map(({ workflowName, status, conclusion }) => [
+                  workflowName,
+                  status,
+                  conclusion,
+                ]),
+              ]);
+
+            if (failed.length > 0) {
+              await core.summary.addRaw('\nGate blocked.\n').write();
+              core.setFailed(
+                `Required workflows not successful for ${sha}: ${failed
+                  .map(({ workflowName, status, conclusion }) => `${workflowName}=${status}/${conclusion}`)
+                  .join(', ')}`,
+              );
+              return;
+            }
+
+            if (pending.length > 0) {
+              await core.summary
+                .addRaw(`\nGate timed out waiting on: ${pending.map(({ workflowName }) => workflowName).join(', ')}.\n`)
+                .write();
+              core.setFailed(
+                `Timed out waiting for required workflows for ${sha}: ${pending
+                  .map(({ workflowName }) => workflowName)
+                  .join(', ')}`,
+              );
+              return;
+            }
+
+            await core.summary.addRaw('\nAll required workflows completed successfully.\n').write();
+
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## CI Gate — ${{ github.event.workflow_run.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field    | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Workflow | ${{ github.event.workflow_run.name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Result   | ${{ github.event.workflow_run.conclusion }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch   | ${{ github.event.workflow_run.head_branch }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA      | \`${{ github.event.workflow_run.head_sha }}\` |" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,189 @@
+
+# ─────────────────────────────────────────────────────────────────
+name: "Docker → ECR"
+
+on:
+  push:
+    branches: [main, dev]
+  # PRs intentionally excluded — saves ECR cost and avoids flooding registry
+
+concurrency:
+  group: docker-ecr-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION:   ap-south-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+  IMAGE_TAG:    ${{ github.sha }}
+
+permissions:
+  id-token:        write   # OIDC token for AWS
+  contents:        read
+  security-events: write   # SARIF uploads to GitHub Security tab
+  packages:        write   # needed if also pushing to GHCR as fallback
+
+jobs:
+  docker:
+    name: ${{ matrix.service }} — Build / Scan / SBOM / Push / Sign
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false          # let both matrix legs finish even if one fails
+      matrix:
+        service: [backend, frontend]
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────
+      - uses: actions/checkout@v4
+
+      # ── 2. AWS Auth via OIDC (no static keys) ─────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:    ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-vox-${{ matrix.service }}-${{ github.run_id }}
+          aws-region:        ${{ env.AWS_REGION }}
+
+      # ── 3. ECR Login ───────────────────────────────────────────
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── 4. Ensure ECR repo exists (idempotent) ────────────────
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories \
+            --repository-names vox-${{ matrix.service }} \
+            --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws ecr create-repository \
+            --repository-name vox-${{ matrix.service }} \
+            --region ${{ env.AWS_REGION }} \
+            --image-scanning-configuration scanOnPush=true \
+            --encryption-configuration encryptionType=AES256
+          echo "✅ ECR repo vox-${{ matrix.service }} ready"
+
+      # ── 5. Docker Buildx ───────────────────────────────────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── 6. Build image locally (not pushed yet — Trivy scans first) ──
+      - name: Build Docker image (local)
+        uses: docker/build-push-action@v5
+        with:
+          context:    ${{ matrix.service }}
+          push:       false
+          load:       true          # load into local daemon for Trivy
+          tags:       ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=docker-${{ matrix.service }}
+          cache-to:   type=gha,scope=docker-${{ matrix.service }},mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            GIT_SHA=${{ github.sha }}
+            GIT_BRANCH=${{ github.ref_name }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.title=vox-${{ matrix.service }}
+
+      # ── 7. Trivy — image vulnerability scan (BLOCKS push) ──────
+      - name: Trivy — container image scan
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref:    ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          scan-type:    image
+          format:       sarif
+          output:       trivy-image-${{ matrix.service }}.sarif
+          severity:     HIGH,CRITICAL
+          exit-code:    "1"           # ← hard block: do NOT push vulnerable images
+          ignore-unfixed: true        # ignore vulns with no available fix
+
+      - name: Upload Trivy image SARIF → GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()                  # upload even if scan failed
+        with:
+          sarif_file: trivy-image-${{ matrix.service }}.sarif
+          category:   trivy-image-${{ matrix.service }}
+
+      # ── 8. Syft — generate SBOM (Software Bill of Materials) ───
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate SBOM with Syft
+        run: |
+          syft ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }} \
+            --output spdx-json \
+            --file sbom-${{ matrix.service }}.spdx.json
+          echo "📦 SBOM generated: sbom-${{ matrix.service }}.spdx.json"
+          # Summary: how many packages
+          cat sbom-${{ matrix.service }}.spdx.json | python3 -c \
+            "import json,sys; d=json.load(sys.stdin); print(f'Packages in SBOM: {len(d.get(\"packages\",[]))}')"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name:           sbom-${{ matrix.service }}
+          path:           sbom-${{ matrix.service }}.spdx.json
+          retention-days: 90          # keep SBOMs long-term for compliance
+
+      # ── 9. Push the scanned local image to ECR ─────────────────
+      - name: Tag scanned image for branch alias
+        run: |
+          docker tag \
+            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }} \
+            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ github.ref_name }}-latest
+
+      - name: Push image to ECR
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          docker push ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ github.ref_name }}-latest
+
+      # ── 10. Cosign — keyless image signing + SBOM attestation ──
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Cosign sign image (keyless via Sigstore/Fulcio)
+        run: |
+          cosign sign --yes \
+            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+        env:
+          COSIGN_EXPERIMENTAL: "1"   # enables keyless (OIDC-based) signing
+
+      - name: Cosign attest SBOM
+        run: |
+          cosign attest --yes \
+            --predicate sbom-${{ matrix.service }}.spdx.json \
+            --type spdxjson \
+            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+
+      # ── 11. Print summary ──────────────────────────────────────
+      - name: Job Summary
+        run: |
+          echo "## vox-${{ matrix.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy image scan   | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Syft SBOM          | ✅ Generated |" >> $GITHUB_STEP_SUMMARY
+          echo "| ECR push           | ✅ Pushed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cosign sign        | ✅ Signed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cosign attest SBOM | ✅ Attested |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ── Gate ─────────────────────────────────────────────────────────
+  gate:
+    name: ✅ Docker Gate
+    runs-on: ubuntu-latest
+    needs: docker
+    if: always()
+    steps:
+      - name: Evaluate matrix results
+        run: |
+          if [[ "${{ needs.docker.result }}" != "success" ]]; then
+            echo "❌ Docker build/scan/push failed."
+            exit 1
+          fi
+          echo "✅ Both images built, scanned, pushed to ECR, signed."
