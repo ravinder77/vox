@@ -20,7 +20,7 @@ env:
 jobs:
   # ── Backend ──────────────────────────────────────────────────────
   backend:
-    name: Backend — Typecheck / Test / Build
+    name: Backend — Build & Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -42,6 +42,11 @@ jobs:
         run: npm run test -- --coverage --ci
         env:
           NODE_ENV: test
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -86,12 +91,12 @@ jobs:
           path: frontend/coverage/
           retention-days: 7
 
-      - name: Build (production)
+      - name: Build
         run: npm run build
         env:
           CI:       true
           NODE_ENV: production
 
-      - name: SCA — npm audit 
+      - name: SCA — npm audit
         run: npm audit --audit-level=high
 
