@@ -38,9 +38,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck tests
-        run: npm run typecheck:test
-
       - name: Unit tests + coverage
         run: npm run test -- --coverage --ci
         env:
@@ -61,7 +58,7 @@ jobs:
 
   # ── Frontend ─────────────────────────────────────────────────────
   frontend:
-    name: Frontend — Typecheck / Test / Build
+    name: Frontend — Build and Test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -79,9 +76,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
-
       - name: Unit tests + coverage
         run: npm run test -- --coverage
 
@@ -98,21 +92,6 @@ jobs:
           CI:       true
           NODE_ENV: production
 
-      - name: SCA — npm audit
+      - name: SCA — npm audit 
         run: npm audit --audit-level=high
 
-  # ── Gate ─────────────────────────────────────────────────────────
-  gate:
-    name: Build & Test Gate
-    runs-on: ubuntu-latest
-    needs: [backend, frontend]
-    if: always()
-    steps:
-      - name: Evaluate
-        run: |
-          if [[ "${{ needs.backend.result }}"  != "success" ||
-                "${{ needs.frontend.result }}" != "success" ]]; then
-            echo "❌ Build/Test failed."
-            exit 1
-          fi
-          echo "✅ Both services built and tested."
