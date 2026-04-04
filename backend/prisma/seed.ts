@@ -7,12 +7,14 @@ const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
 });
 const prisma = new PrismaClient({ adapter });
+const primaryUserPassphrase = process.env.SEED_PRIMARY_USER_PASSPHRASE || 'LocalDemoLogin01';
+const demoUserPassphrase = process.env.SEED_DEMO_USER_PASSPHRASE || 'LocalDemoLogin02';
 
 const users = [
   {
     id: '1',
     email: 'you@vox.io',
-    password: 'Password123!',
+    passphrase: primaryUserPassphrase,
     name: 'Alex Rivera',
     username: 'alex_r',
     initials: 'AR',
@@ -22,7 +24,7 @@ const users = [
   {
     id: '2',
     email: 'demo@vox.io',
-    password: 'Demo1234!',
+    passphrase: demoUserPassphrase,
     name: 'Demo User',
     username: 'demo_user',
     initials: 'DU',
@@ -276,7 +278,7 @@ async function main() {
       data: {
         id: user.id,
         email: user.email,
-        passwordHash: await bcrypt.hash(user.password, 10),
+        passwordHash: await bcrypt.hash(user.passphrase, 10),
         name: user.name,
         username: user.username,
         initials: user.initials,

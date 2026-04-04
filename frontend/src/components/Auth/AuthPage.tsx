@@ -83,7 +83,7 @@ export default function AuthPage({ mode, onLogin, onShowToast }: AuthPageProps) 
     }
 
     if (!loginPassword) {
-      nextErrors.loginPassword = 'Password is required';
+      nextErrors.loginPassword = 'Passcode is required';
     }
 
     if (Object.keys(nextErrors).length) {
@@ -129,11 +129,11 @@ export default function AuthPage({ mode, onLogin, onShowToast }: AuthPageProps) 
     }
 
     if (signupPassword.length < 8 || !/[A-Z]/.test(signupPassword)) {
-      nextErrors.signupPassword = 'Min 8 chars with at least one uppercase letter';
+      nextErrors.signupPassword = 'Use at least 8 chars with one uppercase letter';
     }
 
     if (signupPassword !== signupConfirmPassword) {
-      nextErrors.signupConfirmPassword = 'Passwords do not match';
+      nextErrors.signupConfirmPassword = 'Entries do not match';
     }
 
     if (!signupTerms) {
