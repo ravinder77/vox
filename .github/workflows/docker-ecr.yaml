@@ -5,6 +5,13 @@ name: "Docker → ECR"
 on:
   push:
     branches: [main, dev]
+  workflow_run:
+    workflows:
+      - "Secret Scan"
+      - "SAST — SonarQube & Trivy FS"
+      - "Build & Test"
+    types: [ completed ]
+    branches: [ main, dev ]
   # PRs intentionally excluded — saves ECR cost and avoids flooding registry
 
 concurrency:
