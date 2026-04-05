@@ -1,0 +1,80 @@
+# .pre-commit-config.yaml
+# Place at the ROOT of the vox repo.
+#
+# Install locally:
+#   pip install pre-commit
+#   pre-commit install          ← installs git hook
+#   pre-commit install --hook-type commit-msg  ← optional: commit message lint
+#
+# Run manually against all files:
+#   pre-commit run --all-files
+
+repos:
+  # ── Secret Detection ─────────────────────────────────────────────
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        name: 🔐 Gitleaks — detect secrets
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: 🔐 detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: package-lock.json
+
+  # ── General Hygiene ──────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]   # prevents direct commits to main
+
+  # ── JavaScript / TypeScript ──────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.57.0
+    hooks:
+      - id: eslint
+        name: ⚛️  ESLint (frontend)
+        files: ^frontend/.*\.[jt]sx?$
+        additional_dependencies:
+          - eslint@8
+          - eslint-plugin-react@latest
+          - eslint-plugin-react-hooks@latest
+          - "@typescript-eslint/eslint-plugin@latest"
+          - "@typescript-eslint/parser@latest"
+
+      - id: eslint
+        name: 🟢 ESLint (backend)
+        files: ^backend/.*\.[jt]s$
+        additional_dependencies:
+          - eslint@8
+          - "@typescript-eslint/eslint-plugin@latest"
+          - "@typescript-eslint/parser@latest"
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        name: 💅 Prettier format check
+        files: \.(js|jsx|ts|tsx|json|css|scss|md|yaml|yml)$
+        exclude: ^(backend/coverage|frontend/coverage|frontend/dist|frontend/build)/
+
+  # ── Docker ───────────────────────────────────────────────────────
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        name: 🐳 Hadolint — Dockerfile lint
+        files: Dockerfile.*

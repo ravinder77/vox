@@ -25,7 +25,7 @@ RUN npm run db:generate
 
 # Now copy source — changes here won't invalidate the db:generate layer
 COPY src ./src
-COPY test ./test
+COPY tests ./test
 COPY tsconfig.json ./
 COPY tsconfig.test.json ./
 COPY prisma.config.ts ./
