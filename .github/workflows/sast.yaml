@@ -53,7 +53,7 @@ jobs:
 
 
       - name: SonarQube scan — Backend
-        uses: SonarSource/sonarqube-scan-action@v2
+        uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: backend
         env:
@@ -100,7 +100,7 @@ jobs:
         run: npm run test -- --coverage
 
       - name: SonarQube scan — Frontend
-        uses: SonarSource/sonarqube-scan-action@v2
+        uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: frontend
         env:
