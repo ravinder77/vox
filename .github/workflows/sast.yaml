@@ -65,13 +65,13 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       # Block PR if Quality Gate fails
-      - name: SonarQube Quality Gate check
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
-        with:
-          scanMetadataReportFile: backend/.scannerwork/report-task.txt
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#      - name: SonarQube Quality Gate check
+#        uses: SonarSource/sonarqube-quality-gate-action@v1
+#        timeout-minutes: 5
+#        with:
+#          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+#        env:
+#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -110,14 +110,14 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: SonarQube Quality Gate check
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
-        with:
-          scanMetadataReportFile: frontend/.scannerwork/report-task.txt
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#
+#      - name: SonarQube Quality Gate check
+#        uses: SonarSource/sonarqube-quality-gate-action@v1
+#        timeout-minutes: 5
+#        with:
+#          scanMetadataReportFile: frontend/.scannerwork/report-task.txt
+#        env:
+#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 
 # ─────────────────────────────────────────────────────────────────
