@@ -78,6 +78,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context:    ${{ matrix.service }}
+          pull:       true
           push:       false
           load:       true          # load into local daemon for Trivy
           tags:       ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}

@@ -44,6 +44,11 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=4000
 
+# Bring base OS packages to their latest patched state before the security scan.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user without adding extra OS packages.
 RUN groupadd --system appgroup \
     && useradd --system --gid appgroup --create-home --home-dir /app appuser
