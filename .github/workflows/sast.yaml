@@ -134,6 +134,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: ./backend
+          scanners: vuln
           format: sarif
           output: trivy-backend.sarif
           severity: HIGH,CRITICAL
@@ -157,6 +158,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: ./frontend
+          scanners: vuln
           format: sarif
           output: trivy-frontend.sarif
           severity: HIGH,CRITICAL
