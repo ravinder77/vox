@@ -33,6 +33,10 @@ COPY prisma.config.ts ./
 # Compile TypeScript
 RUN npm run build
 
+# Remove dev dependencies after the build so the runtime image only receives the
+# production dependency tree plus the generated Prisma client artifacts.
+RUN npm prune --omit=dev
+
 # =============================================================================
 # Stage 3: runtime — lean production image
 # =============================================================================
@@ -53,26 +57,11 @@ RUN apt-get update \
 RUN groupadd --system appgroup \
     && useradd --system --gid appgroup --create-home --home-dir /app appuser
 
-# Copy only what the app needs to run.
-# Keep the lockfile only long enough for npm ci, then remove it so image
-# scanners do not report dev-only dependencies from the full project lockfile.
+# Copy the already-pruned production dependency tree and compiled output.
 COPY --from=build --chown=appuser:appgroup /app/package.json ./package.json
-COPY --from=build --chown=appuser:appgroup /app/package-lock.json ./package-lock.json
-
-RUN npm ci --omit=dev --ignore-scripts \
-    && rm -f package-lock.json
-
-# Copy compiled output and Prisma artifacts
+COPY --from=build --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=build --chown=appuser:appgroup /app/dist ./dist
 COPY --from=build --chown=appuser:appgroup /app/prisma ./prisma
-
-# Prisma generates its query engine into node_modules at db:generate time.
-# We need to copy it from the build stage since we ran a fresh npm ci above.
-# The path varies by Prisma version — adjust if using a different engine type.
-COPY --from=build --chown=appuser:appgroup \
-    /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build --chown=appuser:appgroup \
-    /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Drop to non-root for all subsequent operations
 USER appuser

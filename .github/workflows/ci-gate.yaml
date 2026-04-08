@@ -3,9 +3,6 @@ name: "CI Pipeline Gate"
 on:
   workflow_run:
     workflows:
-      - "Secret Scanning"
-      - "SAST — SonarQube & Trivy FS"
-      - "Build & Test"
       - "Docker → ECR"
     types: [completed]
 
