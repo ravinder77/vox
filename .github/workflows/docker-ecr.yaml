@@ -99,6 +99,8 @@ jobs:
         with:
           image-ref:    ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
           scan-type:    image
+          scanners:     vuln
+          limit-severities-for-sarif: true
           format:       sarif
           output:       trivy-image-${{ matrix.service }}.sarif
           severity:     HIGH,CRITICAL
@@ -107,7 +109,7 @@ jobs:
 
       - name: Upload Trivy image SARIF → GitHub Security
         uses: github/codeql-action/upload-sarif@v4
-        if: always()                  # upload even if scan failed
+        if: ${{ always() && hashFiles(format('trivy-image-{0}.sarif', matrix.service)) != '' }}
         with:
           sarif_file: trivy-image-${{ matrix.service }}.sarif
           category:   trivy-image-${{ matrix.service }}
