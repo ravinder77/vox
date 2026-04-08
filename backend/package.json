@@ -19,8 +19,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.5.0",
-    "@prisma/client": "^7.5.0",
+    "@prisma/adapter-pg": "7.6.0",
+    "@prisma/client": "7.6.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -41,7 +41,7 @@
     "@types/node": "^24.5.2",
     "@types/supertest": "^7.2.0",
     "jest": "^30.3.0",
-    "prisma": "^6.19.3",
+    "prisma": "7.6.0",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
     "tsx": "^4.20.6",
