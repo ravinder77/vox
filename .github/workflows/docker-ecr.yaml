@@ -3,25 +3,22 @@
 name: "Docker → ECR"
 
 on:
-  push:
-    branches: [main, dev]
   workflow_run:
     workflows:
-      - "Secret Scan"
       - "SAST — SonarQube & Trivy FS"
-      - "Build & Test"
     types: [ completed ]
     branches: [ main, dev ]
+  workflow_dispatch:
   # PRs intentionally excluded — saves ECR cost and avoids flooding registry
 
 concurrency:
-  group: docker-ecr-${{ github.ref }}
+  group: docker-ecr-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: true
 
 env:
   AWS_REGION:   ap-south-1
   ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
-  IMAGE_TAG:    ${{ github.sha }}
+  IMAGE_TAG:    ${{ github.event.workflow_run.head_sha || github.sha }}
 
 permissions:
   id-token:        write   # OIDC token for AWS
@@ -33,6 +30,7 @@ jobs:
   docker:
     name: ${{ matrix.service }} — Build / Scan / SBOM / Push / Sign
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     strategy:
       fail-fast: false          # let both matrix legs finish even if one fails
@@ -42,6 +40,8 @@ jobs:
     steps:
       # ── 1. Checkout ────────────────────────────────────────────
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # ── 2. AWS Auth via OIDC (no static keys) ─────────────────
       - name: Configure AWS credentials (OIDC)
