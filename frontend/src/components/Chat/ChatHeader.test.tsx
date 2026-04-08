@@ -36,4 +36,32 @@ describe('ChatHeader', () => {
         fireEvent.click(screen.getByTitle('Voice call'));
         expect(onStartCall).toHaveBeenCalled();
     });
+
+    it('shows participant count and secondary actions for groups', () => {
+        const onShowToast = vi.fn();
+
+        render(
+            <ChatHeader
+                activeConversation={{
+                    ...conversation,
+                    type: 'group',
+                    participantCount: 3,
+                }}
+                onShowToast={onShowToast}
+                onStartCall={vi.fn()}
+            />,
+        );
+
+        expect(screen.getByText('3 participants')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTitle('Video call'));
+        fireEvent.click(screen.getByTitle('Search'));
+        fireEvent.click(screen.getByTitle('Pin'));
+        fireEvent.click(screen.getByTitle('More'));
+
+        expect(onShowToast).toHaveBeenCalledWith('Starting video call…');
+        expect(onShowToast).toHaveBeenCalledWith('Search in conversation');
+        expect(onShowToast).toHaveBeenCalledWith('Pinned messages');
+        expect(onShowToast).toHaveBeenCalledWith('More options');
+    });
 });

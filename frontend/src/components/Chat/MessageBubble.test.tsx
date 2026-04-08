@@ -1,79 +1,57 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import MessageBubble from './MessageBubble';
-
-const baseConversation = {
-    id: 'c1',
-    name: 'Room',
-    initials: 'R',
-    type: 'direct',
-};
-
-const currentUser = {
-    id: '1',
-    name: 'Alex',
-    initials: 'A',
-};
-
-const defaultHandlers = {
-    onReply: vi.fn(),
-    onShowToast: vi.fn(),
-};
+import {
+    createMockConversation,
+    createMockMessage,
+    createMockUser,
+} from '../../test/factory';
 
 describe('MessageBubble', () => {
+    const defaultHandlers = {
+        onReply: vi.fn(),
+        onShowToast: vi.fn(),
+    };
+
     it('renders own text message', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm1',
-                    kind: 'text',
-                    text: 'Hello world',
-                    sender: 'self',
-                    time: '10:00',
-                }}
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({ text: 'Hello world' })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
         );
 
         expect(screen.getByText('Hello world')).toBeInTheDocument();
-        expect(screen.getByText('You')).toBeInTheDocument(); // role
+        expect(screen.getByText('You')).toBeInTheDocument();
     });
 
     it('renders other user message with fallback name', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm2',
-                    kind: 'text',
-                    text: 'Hi',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
                     sender: 'other',
-                    time: '10:01',
-                }}
+                    senderUserId: '2',
+                    senderName: '',
+                })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
         );
 
-        expect(screen.getByText('Room')).toBeInTheDocument(); // fallback author
+        expect(screen.getByText('Room')).toBeInTheDocument();
     });
 
-    it('renders reply preview when present', () => {
+    it('renders reply preview', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm3',
-                    kind: 'text',
-                    text: 'Replying',
-                    sender: 'self',
-                    time: '10:02',
-                }}
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage()}
                 replyPreview="Original message"
                 {...defaultHandlers}
             />,
@@ -85,14 +63,12 @@ describe('MessageBubble', () => {
     it('renders image message', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm4',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
                     kind: 'image',
                     image: 'test.png',
-                    time: '10:03',
-                }}
+                })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
@@ -101,20 +77,18 @@ describe('MessageBubble', () => {
         expect(screen.getByAltText('Shared media')).toBeInTheDocument();
     });
 
-    it('renders file message and handles download click', () => {
+    it('renders file message and handles download', () => {
         const onShowToast = vi.fn();
 
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm5',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
                     kind: 'file',
                     fileName: 'doc.pdf',
                     fileSize: '2MB',
-                    time: '10:04',
-                }}
+                })}
                 replyPreview=""
                 onReply={vi.fn()}
                 onShowToast={onShowToast}
@@ -127,19 +101,14 @@ describe('MessageBubble', () => {
         expect(onShowToast).toHaveBeenCalledWith('Downloading file…');
     });
 
-    it('renders message status only for own messages', () => {
+    it('renders status only for own messages', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm6',
-                    kind: 'text',
-                    text: 'Delivered',
-                    sender: 'self',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
                     status: '✓✓',
-                    time: '10:05',
-                }}
+                })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
@@ -148,19 +117,16 @@ describe('MessageBubble', () => {
         expect(screen.getByText('✓✓')).toBeInTheDocument();
     });
 
-    it('does not render status for others', () => {
+    it('does not render status for other users', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm7',
-                    kind: 'text',
-                    text: 'Other msg',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
                     sender: 'other',
+                    senderUserId: '2',
                     status: '✓✓',
-                    time: '10:06',
-                }}
+                })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
@@ -169,19 +135,14 @@ describe('MessageBubble', () => {
         expect(screen.queryByText('✓✓')).not.toBeInTheDocument();
     });
 
-    it('renders reactions when present', () => {
+    it('renders reactions', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm8',
-                    kind: 'text',
-                    text: 'Reacted',
-                    sender: 'self',
-                    time: '10:07',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
                     reactions: [{ emoji: '🔥', count: 3 }],
-                }}
+                })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
@@ -190,23 +151,41 @@ describe('MessageBubble', () => {
         expect(screen.getByText('🔥')).toBeInTheDocument();
     });
 
-    it('uses senderUserId logic for ownership', () => {
+    it('uses senderUserId for ownership', () => {
         render(
             <MessageBubble
-                activeConversation={baseConversation}
-                currentUser={currentUser}
-                message={{
-                    id: 'm9',
-                    kind: 'text',
-                    text: 'Ownership check',
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser({ id: '1' })}
+                message={createMockMessage({
                     senderUserId: '1',
-                    time: '10:08',
-                }}
+                })}
                 replyPreview=""
                 {...defaultHandlers}
             />,
         );
 
         expect(screen.getByText('You')).toBeInTheDocument();
+    });
+
+    it('falls back to preview text when empty', () => {
+        const onShowToast = vi.fn();
+
+        render(
+            <MessageBubble
+                activeConversation={createMockConversation()}
+                currentUser={createMockUser()}
+                message={createMockMessage({
+                    text: '',
+                    caption: '',
+                    fileName: '',
+                })}
+                replyPreview=""
+                onReply={vi.fn()}
+                onShowToast={onShowToast}
+            />,
+        );
+
+        fireEvent.click(screen.getByText('😊'));
+        expect(onShowToast).toHaveBeenCalledWith('React to: Alex: shared a message');
     });
 });

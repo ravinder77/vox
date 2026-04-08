@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { formatConversationListTime } from './chat';
+import {
+  formatConversationListTime,
+  formatNow,
+  getLocalTimeLabel,
+  getStatusClass,
+  getStatusLabel,
+} from './chat';
 
 describe('formatConversationListTime', () => {
   it('returns now for explicit now values', () => {
@@ -26,5 +32,30 @@ describe('formatConversationListTime', () => {
 
   it('preserves non-date strings', () => {
     expect(formatConversationListTime('Tue')).toBe('Tue');
+  });
+
+  it('returns empty text for blank values', () => {
+    expect(formatConversationListTime('   ')).toBe('');
+  });
+});
+
+describe('chat helpers', () => {
+  it('returns status labels and classes', () => {
+    expect(getStatusLabel('online')).toBe('Online now');
+    expect(getStatusLabel('away')).toBe('Away');
+    expect(getStatusLabel('offline')).toBe('Offline');
+    expect(getStatusClass('online')).toBe('online');
+    expect(getStatusClass('away')).toBe('away');
+    expect(getStatusClass('offline')).toBe('offline');
+  });
+
+  it('formats current times and local time labels', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-24T10:05:00.000Z'));
+
+    expect(formatNow()).toMatch(/^\d{2}:\d{2}/);
+    expect(getLocalTimeLabel()).toMatch(/PST$/);
+
+    vi.useRealTimers();
   });
 });

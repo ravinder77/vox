@@ -1,11 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import CallBanner from './CallBanner';
 import { describe, it, expect, vi } from 'vitest';
+import {createMockConversation} from "../../test/factory";
 
 describe('CallBanner', () => {
     it('does not render when not visible', () => {
         const { container } = render(
-            <CallBanner activeConversation={} isVisible={false} callSeconds={0} onEndCall={vi.fn()} />,
+            <CallBanner activeConversation={createMockConversation()} isVisible={false} callSeconds={0} onEndCall={vi.fn()} />,
         );
 
         expect(container.firstChild).toBeNull();
