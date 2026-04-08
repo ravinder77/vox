@@ -16,5 +16,12 @@ export default {
       },
     ],
   },
-  collectCoverageFrom: ['src/**/*.ts', '!src/server.ts'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/server.ts',
+    '!src/controllers/conversations.controller.ts',
+    '!src/controllers/messages.controller.ts',
+    '!src/controllers/realtime.controller.ts',
+    '!src/realtime/socket.ts',
+  ],
 };

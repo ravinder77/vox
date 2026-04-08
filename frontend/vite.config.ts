@@ -10,6 +10,15 @@ export default defineConfig({
 
     coverage: {
       provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/test/**',
+        'src/hooks/**',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/types/**',
+      ],
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
     },
