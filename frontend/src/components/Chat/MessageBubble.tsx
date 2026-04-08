@@ -19,7 +19,7 @@ export default function MessageBubble({
   replyPreview,
   onReply,
   onShowToast,
-}: MessageBubbleProps) {
+}: Readonly<MessageBubbleProps>) {
   const isOwn = message.senderUserId ? message.senderUserId === currentUser.id : message.sender === 'self';
   const avatarText = isOwn
     ? currentUser.initials

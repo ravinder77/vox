@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "24"
+  NODE_VERSION: "22"
 
 jobs:
   # ── Backend ──────
@@ -38,11 +38,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+
       - name: Unit tests + coverage
         run: npm run test -- --coverage --ci
         env:
           NODE_ENV: test
-
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -54,7 +57,6 @@ jobs:
       - name: Build
         if: success()
         run: npm run build --if-present
-
 
 
   # ── Frontend ─────────

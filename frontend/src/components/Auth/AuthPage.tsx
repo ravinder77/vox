@@ -27,7 +27,7 @@ type AuthPageProps = {
 
 type AuthFormState = typeof initialForm;
 
-export default function AuthPage({ mode, onLogin, onShowToast }: AuthPageProps) {
+export default function AuthPage({ mode, onLogin, onShowToast }: Readonly<AuthPageProps>) {
   const navigate = useNavigate();
   const [form, setForm] = useState<AuthFormState>(initialForm);
   const [errors, setErrors] = useState<ActionErrors>({});

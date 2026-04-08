@@ -106,7 +106,7 @@ jobs:
           ignore-unfixed: true        # ignore vulns with no available fix
 
       - name: Upload Trivy image SARIF → GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()                  # upload even if scan failed
         with:
           sarif_file: trivy-image-${{ matrix.service }}.sarif
