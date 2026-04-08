@@ -48,11 +48,14 @@ ENV NODE_ENV=production \
 RUN groupadd --system appgroup \
     && useradd --system --gid appgroup --create-home --home-dir /app appuser
 
-# Copy only what the app needs to run
-# Fresh npm ci --omit=dev gives a clean, auditable node_modules
-COPY --from=build --chown=appuser:appgroup /app/package*.json ./
+# Copy only what the app needs to run.
+# Keep the lockfile only long enough for npm ci, then remove it so image
+# scanners do not report dev-only dependencies from the full project lockfile.
+COPY --from=build --chown=appuser:appgroup /app/package.json ./package.json
+COPY --from=build --chown=appuser:appgroup /app/package-lock.json ./package-lock.json
 
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --ignore-scripts \
+    && rm -f package-lock.json
 
 # Copy compiled output and Prisma artifacts
 COPY --from=build --chown=appuser:appgroup /app/dist ./dist
