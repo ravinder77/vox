@@ -14,7 +14,7 @@ COPY . .
 
 RUN npm run build
 
-FROM nginx:alpine AS runtime
+FROM nginx:1.29.7-trixie AS runtime
 
 LABEL authors="ravinder"
 

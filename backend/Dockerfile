@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: deps — install production + dev dependencies
 # =============================================================================
-FROM node:24-alpine AS deps
+FROM node:24-trixie-slim AS deps
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ FROM deps AS build
 # separately from source changes
 COPY prisma ./prisma
 
-# Generate Prisma client (binaryTargets must include linux-musl for Alpine)
+# Generate Prisma client for the runtime platform
 RUN npm run db:generate
 
 # Now copy source — changes here won't invalidate the db:generate layer
@@ -36,7 +36,7 @@ RUN npm run build
 # =============================================================================
 # Stage 3: runtime — lean production image
 # =============================================================================
-FROM node:24-alpine AS runtime
+FROM node:24-trixie-slim AS runtime
 
 WORKDIR /app
 
@@ -44,10 +44,9 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=4000
 
-# Create non-root user and install wget for healthcheck in one layer
-RUN addgroup -S appgroup \
-    && adduser -S appuser -G appgroup \
-    && apk add --no-cache wget
+# Create a non-root user without adding extra OS packages.
+RUN groupadd --system appgroup \
+    && useradd --system --gid appgroup --create-home --home-dir /app appuser
 
 # Copy only what the app needs to run
 # Fresh npm ci --omit=dev gives a clean, auditable node_modules
@@ -72,9 +71,9 @@ USER appuser
 
 EXPOSE 4000
 
-# wget-based healthcheck — no curl needed, matches the wget already installed
+# Use Node's built-in fetch for healthchecks to avoid adding curl/wget packages.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:4000/health || exit 1
+    CMD node -e "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Use exec form to receive signals correctly (no shell wrapper)
 CMD ["node", "dist/src/server.js"]
