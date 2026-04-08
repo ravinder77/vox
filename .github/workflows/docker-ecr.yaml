@@ -95,18 +95,30 @@ jobs:
             org.opencontainers.image.title=vox-${{ matrix.service }}
 
       # ── 7. Trivy — image vulnerability scan (BLOCKS push) ──────
-      - name: Trivy — container image scan
-        uses: aquasecurity/trivy-action@v0.35.0
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@e07451d2e059ed86c2870430ea286b3a9e0bf241
         with:
-          image-ref:    ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
-          scan-type:    image
-          scanners:     vuln
-          limit-severities-for-sarif: true
-          format:       sarif
-          output:       trivy-image-${{ matrix.service }}.sarif
-          severity:     HIGH,CRITICAL
-          exit-code:    "1"           # ← hard block: do NOT push vulnerable images
-          ignore-unfixed: true        # ignore vulns with no available fix
+          version: v0.69.3
+
+      - name: Trivy — export image SARIF
+        run: |
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format sarif \
+            --output trivy-image-${{ matrix.service }}.sarif \
+            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+
+      - name: Trivy — fail on image vulnerabilities
+        run: |
+          trivy image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format table \
+            --exit-code 1 \
+            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
 
       - name: Upload Trivy image SARIF → GitHub Security
         uses: github/codeql-action/upload-sarif@v4
