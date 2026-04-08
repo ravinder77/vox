@@ -10,6 +10,7 @@ export default defineConfig({
 
     coverage: {
       provider: 'v8',
+      all: true,
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/**/*.test.{ts,tsx}',
@@ -19,6 +20,12 @@ export default defineConfig({
         'src/vite-env.d.ts',
         'src/types/**',
       ],
+      thresholds: {
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
+      },
       reporter: ['text', 'lcov'],
       reportsDirectory: './coverage',
     },
