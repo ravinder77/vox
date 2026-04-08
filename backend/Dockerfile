@@ -53,6 +53,11 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
+# The production container only runs Node.js. Remove npm/corepack so Trivy
+# does not flag vulnerabilities in bundled package-manager dependencies.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 # Create a non-root user without adding extra OS packages.
 RUN groupadd --system appgroup \
     && useradd --system --gid appgroup --create-home --home-dir /app appuser
