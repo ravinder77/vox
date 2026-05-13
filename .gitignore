@@ -1,0 +1,107 @@
+.DS_Store
+
+/env
+.env
+.env.*
+
+
+.idea/
+.vscode/
+
+node_modules/
+
+dist/
+build/
+.vite/
+
+coverage/
+
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+backend/node_modules/
+backend/dist/
+backend/build/
+backend/generated/
+backend/.env
+backend/.env.*
+
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+
+apps/backend/prisma/*.db
+apps/backend/prisma/*.db-journal
+
+
+terraform/environments/dev/terraform.tfvars
+terraform/environments/dev/*.tfvars
+
+
+# =========================
+# Terraform core
+# =========================
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# =========================
+# Terraform plans
+# =========================
+*.tfplan
+*.plan
+
+# =========================
+# Variable files (may contain secrets)
+# =========================
+*.tfvars
+*.tfvars.json
+
+# Exception if you want examples tracked
+!terraform.tfvars.example
+!*.auto.tfvars.example
+
+# =========================
+# Override files
+# =========================
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# =========================
+# Terraform lock file
+# =========================
+# KEEP THIS if working in teams
+# Comment next line if you WANT to version lock providers
+# .terraform.lock.hcl
+
+# =========================
+# CLI config files
+# =========================
+.terraformrc
+terraform.rc
+
+# =========================
+# Sensitive files
+# =========================
+*.pem
+*.key
+*.crt
+*.p12
+
+# Terraform
+
+
+# =========================
+# OS generated
+# =========================
+Thumbs.db.terraform/

@@ -1,0 +1,37 @@
+external-secrets:
+  installCRDs: true
+  replicaCount: 1
+
+  serviceAccount:
+    create: true
+    name: external-secrets
+    annotations:
+      eks.amazonaws.com/role-arn: ""   # injected at deploy time
+
+  # Webhook for validating ExternalSecret resources
+  webhook:
+    replicaCount: 1
+
+  certController:
+    replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+  # Metrics for Prometheus
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    additionalLabels:
+      release: vox-monitoring
+
+# ClusterSecretStore — rendered in templates/cluster-secret-store.yaml
+clusterSecretStore:
+  region: ap-south-1
+  serviceAccountName: external-secrets
+  serviceAccountNamespace: external-secrets

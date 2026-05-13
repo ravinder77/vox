@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  online
+  away
+  offline
+}
+
+enum ConversationType {
+  direct
+  group
+}
+
+enum MessageKind {
+  text
+  image
+  file
+}
+
+enum MessageSender {
+  self
+  other
+}
+
+enum CallMode {
+  voice
+  video
+}
+
+model User {
+  id            String                    @id
+  email         String                    @unique
+  passwordHash  String
+  name          String
+  username      String                    @unique
+  initials      String
+  role          String
+  status        UserStatus
+  typingStates  TypingState[]
+  callsStarted  ConversationCall[]        @relation("StartedCalls")
+  conversations ConversationParticipant[]
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  @@map("users")
+}
+
+model Conversation {
+  id             String                    @id
+  type           ConversationType
+  name           String
+  initials       String
+  gradient       Json?
+  groupInitials  Json?
+  groupGradients Json?
+  status         UserStatus
+  preview        String
+  time           String
+  unread         Int                       @default(0)
+  role           String
+  email          String
+  location       String
+  isMuted        Boolean                   @default(false)
+  messages       Message[]
+  mediaItems     ConversationMedia[]
+  typingState    TypingState?
+  callState      ConversationCall?
+  participants   ConversationParticipant[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String            @id
+  conversationId String
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  kind           MessageKind
+  sender         MessageSender
+  senderUserId   String?
+  senderName     String?
+  senderInitials String?
+  text           String?
+  image          String?
+  caption        String?
+  fileName       String?
+  fileSize       String?
+  time           String
+  status         String?
+  replyTo        String?
+  reactions      MessageReaction[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  emoji     String
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([messageId, emoji])
+  @@map("message_reactions")
+}
+
+model ConversationMedia {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  url            String
+  position       Int          @default(0)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, position])
+  @@map("conversation_media")
+}
+
+model TypingState {
+  conversationId String       @id
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  isTyping       Boolean      @default(false)
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
+  name           String?
+  updatedAt      DateTime     @updatedAt
+
+  @@map("typing_states")
+}
+
+model ConversationCall {
+  conversationId String       @id
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  isActive       Boolean      @default(false)
+  startedAt      DateTime?
+  endedAt        DateTime?
+  startedById    String?
+  startedBy      User?        @relation("StartedCalls", fields: [startedById], references: [id])
+  mode           CallMode?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@map("conversation_calls")
+}

@@ -1,0 +1,50 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: voxchat-gateway
+  namespace: voxchat
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    external-dns.alpha.kubernetes.io/hostname: >
+      voxchat.in,api.voxchat.in,grafana.voxchat.in
+
+spec:
+  gatewayClassName: voxchat-gateway-class
+  listeners:
+    - name: http
+      hostname: "*.{{ .Values.domain }}"
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+
+      # HTTPS Wildcard
+    - name: https
+      hostname: "*.{{ .Values.domain }}"
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        options:
+          alb.ingress.kubernetes.io/certificate-arn: {{ .Values.acmCertificateArn | quote }}
+
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    # HTTPS root domain — voxchat.in (wildcard doesn't match bare domain!)
+    - name: https-root
+      hostname: {{ .Values.domain | quote }}
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        options:
+          alb.ingress.kubernetes.io/certificate-arn: {{ .Values.acmCertificateArn | quote }}
+      allowedRoutes:
+        namespaces: { from: All }
+
+

@@ -1,0 +1,142 @@
+name: "SAST — SonarQube & Trivy FS"
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: sast-${{ github.ref }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+# ─────────────────────────────────────────────────────────────────
+# 🔎 SonarQube —
+# ─────────────────────────────────────────────────────────────────
+  sonar:
+    name: 🔎 SonarQube
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{env.NODE_VERSION}}
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npm run db:generate
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+
+      - name: Run Backend Tests with Coverage
+        working-directory: backend
+        run: npm run test -- --coverage --ci
+        env:
+          NODE_ENV: test
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Frontend Tests with Coverage
+        working-directory: frontend
+        run: npm run test -- --coverage
+
+      - name: SonarQube scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+
+# ─────────────────────────────────────────────────────────────────
+# 🛡️ Trivy FileSystem Scan
+# ─────────────────────────────────────────────────────────────────
+  trivy-fs-backend:
+    name: Trivy - filesystem vulnerability scanner (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner - backend
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: ./backend
+          scanners: vuln
+          limit-severities-for-sarif: true
+          format: sarif
+          output: trivy-backend.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Upload Trivy FS SARIF results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-fs-backend
+
+  trivy-fs-frontend:
+    name: Trivy - filesystem vulnerability scanner (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner — frontend
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: ./frontend
+          scanners: vuln
+          limit-severities-for-sarif: true
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Upload Trivy FS SARIF results (frontend)
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-fs-frontend
+
+
+  # ── Gate ─────────────────────────────────────────────────────────
+  gate:
+    name: SAST Gate
+    runs-on: ubuntu-latest
+    needs: [ sonar, trivy-fs-backend, trivy-fs-frontend ]
+    if: always()
+    steps:
+      - name: Evaluate
+        run: |
+          if [[ "${{ needs.sonar.result }}" != "success" ||
+                "${{ needs.trivy-fs-backend.result }}" != "success" ||
+                "${{ needs.trivy-fs-frontend.result }}" != "success" ]]; then
+            echo "❌ SAST / code quality gate failed."
+            exit 1
+          fi
+          echo "✅ SonarQube Quality Gates passed. No source vulnerabilities."
