@@ -1,0 +1,92 @@
+repositories:
+  - name: eks
+    url: https://aws.github.io/eks-charts
+  - name: external-secrets
+    url: https://charts.external-secrets.io
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+
+releases:
+  - name: aws-load-balancer-controller
+    namespace: kube-system
+    chart: eks/aws-load-balancer-controller
+    version: 1.14.1
+    labels:
+      tier: platform
+    createNamespace: true
+    values:
+      - helm/values/gateway.yaml
+    wait: true
+
+  - name: voxchat-monitoring
+    namespace: monitoring
+    chart: prometheus-community/kube-prometheus-stack
+    version: 58.x.x
+    labels:
+      tier: platform
+    createNamespace: true
+    values:
+      - helm/values/kube-prometheus-stack.yaml
+    wait: true
+
+  - name: external-secrets
+    namespace: external-secrets
+    chart: external-secrets/external-secrets
+    version: 2.3.0
+    labels:
+      tier: platform
+    createNamespace: true
+    values:
+      - helm/values/external-secrets.yaml
+    wait: true
+    needs:
+      - monitoring/voxchat-monitoring
+
+  - name: external-dns
+    namespace: external-dns
+    chart: external-dns/external-dns
+    version: 1.21.1
+    labels:
+      tier: platform
+    createNamespace: true
+    values:
+      - helm/values/external-dns.yaml
+    wait: true
+    needs:
+      - monitoring/voxchat-monitoring
+
+  - name: voxchat-backend
+    namespace: voxchat
+    chart: helm/charts/backend
+    labels:
+      tier: app
+    createNamespace: true
+    values:
+      - helm/values/dev/backend.yaml
+    set:
+      - name: image.repository
+        value: '{{ requiredEnv "BACKEND_IMAGE_REPOSITORY" }}'
+      - name: image.tag
+        value: '{{ env "IMAGE_TAG" | default "latest" }}'
+    needs:
+      - kube-system/aws-load-balancer-controller
+      - external-secrets/external-secrets
+
+  - name: voxchat-frontend
+    namespace: voxchat
+    chart: helm/charts/frontend
+    labels:
+      tier: app
+    createNamespace: true
+    values:
+      - helm/values/dev/frontend.yaml
+    set:
+      - name: image.repository
+        value: '{{ requiredEnv "FRONTEND_IMAGE_REPOSITORY" }}'
+      - name: image.tag
+        value: '{{ env "IMAGE_TAG" | default "latest" }}'
+    needs:
+      - kube-system/aws-load-balancer-controller
+      - external-secrets/external-secrets

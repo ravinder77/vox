@@ -215,7 +215,7 @@ export default function AuthPage({ mode, onLogin, onShowToast }: Readonly<AuthPa
       <div className="auth-card">
         <div className="auth-logo">
           <div className="auth-logo-icon">💬</div>
-          <span className="auth-logo-text">Vox</span>
+          <span className="auth-logo-text">Voxchat</span>
         </div>
 
         {(mode === 'login' || mode === 'signup') && (

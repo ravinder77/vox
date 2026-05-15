@@ -11,43 +11,51 @@ resource "aws_iam_openid_connect_provider" "github" {
 
 data "aws_iam_policy_document" "github_actions_assume" {
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
-      type = "Federated"
+      type        = "Federated"
       identifiers = [aws_iam_openid_connect_provider.github.arn]
     }
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:aud"
-      values = ["sts.amazonaws.com"]
+      values   = ["sts.amazonaws.com"]
     }
     condition {
-      test = "StringLike"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values = ["repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main"]
+      values = [
+        "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main",
+        "repo:${var.github_org}/${var.github_repo}:ref:refs/tags/*",
+      ]
     }
   }
 }
 
 resource "aws_iam_role" "github_actions" {
-  name = "${local.name_prefix}-github-actions-role"
+  name               = "github-actions-role"
   assume_role_policy = data.aws_iam_policy_document.github_actions_assume.json
-  tags = var.tags
+  tags               = var.tags
 }
 
 resource "aws_iam_policy" "github_actions" {
-  name = "${local.name_prefix}-github-actions-policy"
+  name = "github-actions-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-
-      # ECR Login + Push
       {
+        Sid      = "ECRAuth"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = ["*"] # account-level, must be *
+      },
+      {
+        Sid    = "ECRPush"
         Effect = "Allow"
         Action = [
-          "ecr:GetAuthorizationToken",
+          "ecr:DescribeRepositories",
           "ecr:BatchCheckLayerAvailability",
           "ecr:CompleteLayerUpload",
           "ecr:UploadLayerPart",
@@ -55,23 +63,25 @@ resource "aws_iam_policy" "github_actions" {
           "ecr:PutImage",
           "ecr:BatchGetImage"
         ]
-        Resource = "*"
-      },
-
-      # Read cluster metadata
-      {
-        Effect = "Allow"
-        Action = [
-          "eks:DescribeCluster"
+        Resource = [
+          "arn:aws:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${var.project}/*"
         ]
-        Resource = "*"
+      },
+      {
+        Sid    = "EKSDescribe"
+        Effect = "Allow"
+        Action = ["eks:DescribeCluster"]
+        Resource = [
+          "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/${var.eks_cluster_name}"
+        ]
       }
     ]
   })
+
 }
 
 resource "aws_iam_role_policy_attachment" "github_admin" {
-  role = aws_iam_role.github_actions.name
+  role       = aws_iam_role.github_actions.name
   policy_arn = aws_iam_policy.github_actions.arn
 }
 
@@ -86,7 +96,7 @@ data "aws_iam_policy_document" "pod_identity_assume" {
       "sts:TagSession"
     ]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["pods.eks.amazonaws.com"]
     }
   }
@@ -97,27 +107,27 @@ data "aws_iam_policy_document" "pod_identity_assume" {
 # ─────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "external_dns" {
-  name = "${local.name_prefix}-external-dns-role"
+  name               = "external-dns-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
-  tags = var.tags
+  tags               = var.tags
 }
 
 # ─────────────────────────────────────────────────────────────
 # External DNS Policy
 # ─────────────────────────────────────────────────────────────
 resource "aws_iam_policy" "external_dns" {
-  name = "${local.name_prefix}-external-dns-policy"
+  name = "external-dns-policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = ["route53:ChangeResourceRecordSets"]
+        Effect   = "Allow"
+        Action   = ["route53:ChangeResourceRecordSets"]
         Resource = [aws_route53_zone.main.arn]
       },
       {
-        Effect = "Allow"
-        Action = ["route53:ListHostedZones", "route53:ListResourceRecordSets"]
+        Effect   = "Allow"
+        Action   = ["route53:ListHostedZones", "route53:ListResourceRecordSets"]
         Resource = ["*"]
       }
     ]
@@ -125,7 +135,7 @@ resource "aws_iam_policy" "external_dns" {
 }
 
 resource "aws_iam_role_policy_attachment" "external_dns" {
-  role = aws_iam_role.external_dns.name
+  role       = aws_iam_role.external_dns.name
   policy_arn = aws_iam_policy.external_dns.arn
 }
 
@@ -133,25 +143,25 @@ resource "aws_eks_pod_identity_association" "external_dns" {
   cluster_name    = var.eks_cluster_name
   namespace       = "external-dns"
   service_account = "external-dns"
-  role_arn = aws_iam_role.external_dns.arn
+  role_arn        = aws_iam_role.external_dns.arn
 }
 
 # ─────────────────────────────────────────────────────────────
 # ALB CONTROLLER
 # ─────────────────────────────────────────────────────────────
 resource "aws_iam_role" "alb_controller" {
-  name = "${local.name_prefix}-alb-controller-role"
+  name               = "alb-controller-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
-  tags = var.tags
+  tags               = var.tags
 }
 
 resource "aws_iam_policy" "alb_controller" {
-  name = "${local.name_prefix}-alb-controller-policy"
+  name   = "alb-controller-policy"
   policy = file("${path.module}/../../policies/alb-controller-policy.json")
 }
 
 resource "aws_iam_role_policy_attachment" "alb_controller" {
-  role = aws_iam_role.alb_controller.name
+  role       = aws_iam_role.alb_controller.name
   policy_arn = aws_iam_policy.alb_controller.arn
 }
 
@@ -168,14 +178,14 @@ resource "aws_eks_pod_identity_association" "alb_controller" {
 # ─────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "external_secrets" {
-  name = "${local.name_prefix}-external-secrets-role"
+  name               = "${local.name_prefix}-external-secrets-role"
   assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
-  tags = var.tags
+  tags               = var.tags
 }
 
 
 resource "aws_iam_policy" "external_secrets" {
-  name = "${local.name_prefix}-external-secrets-policy"
+  name = "external-secrets-policy"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -189,6 +199,7 @@ resource "aws_iam_policy" "external_secrets" {
         ]
         Resource = [
           "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${local.name_prefix}-*",
+          "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project}/${var.environment}/*",
         ]
       },
       {
@@ -217,6 +228,28 @@ resource "aws_eks_pod_identity_association" "external_secrets" {
   cluster_name    = var.eks_cluster_name
   namespace       = "external-secrets"
   service_account = "external-secrets"
+  role_arn        = aws_iam_role.external_secrets.arn
+}
 
-  role_arn = aws_iam_role.external_secrets.arn
+
+
+# ─────────────────────────────────────────────────────────────
+# EKS Access Entries (replaces aws-auth ConfigMap)
+# ─────────────────────────────────────────────────────────────
+
+resource "aws_eks_access_entry" "github_actions" {
+  cluster_name  = var.eks_cluster_name
+  principal_arn = aws_iam_role.github_actions.arn
+  type          = "STANDARD"
+  tags          = var.tags
+}
+
+resource "aws_eks_access_policy_association" "github_actions" {
+  cluster_name  = var.eks_cluster_name
+  principal_arn = aws_iam_role.github_actions.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
 }

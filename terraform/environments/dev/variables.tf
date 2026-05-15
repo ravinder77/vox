@@ -3,7 +3,7 @@ variable "aws_region" {
 }
 
 variable "project" {
-  type = string
+  type    = string
   default = "voxchat"
 }
 
@@ -12,8 +12,29 @@ variable "environment" {
 }
 
 variable "domain_name" {
-  type = string
+  type    = string
   default = "voxchat.in"
+}
+
+variable "jwt_expires_in" {
+  type    = string
+  default = "7d"
+}
+
+variable "cookie_name" {
+  type    = string
+  default = "vox_token"
+}
+
+variable "csrf_cookie_name" {
+  type    = string
+  default = "vox_csrf"
+}
+
+variable "app_namespace" {
+  description = "Kubernetes namespace where the app runs"
+  type        = string
+  default     = "voxchat"
 }
 
 variable "github_org" {

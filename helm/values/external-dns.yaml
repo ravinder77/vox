@@ -1,0 +1,54 @@
+
+provider:
+  name: aws
+aws:
+  region: ap-south-1
+  zoneType: public
+
+# Only manage records under voxchat.in
+domainFilters:
+  - voxchat.in
+
+txtOwnerId: "voxchat"
+registry: txt
+policy: sync
+interval: 1m
+triggerLoopOnEvent: true
+logFormat: json
+
+# ← this is the key addition
+sources:
+  - gateway-httproute
+  - service
+
+serviceAccount:
+  create: true
+  name: external-dns
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# ── Prometheus ServiceMonitor ──────────────────────────────────────────────────
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  additionalLabels:
+    release: voxchat-monitoring
+
+# ── RBAC — Gateway API permissions ────────────────────────────────────────────
+# External DNS needs to list/watch HTTPRoute and Gateway resources
+# This creates ClusterRole + ClusterRoleBinding automatically
+rbac:
+  create: true
+  additionalPermissions:
+    - apiGroups: [ "gateway.networking.k8s.io" ]
+      resources: [ "gateways", "httproutes", "grpcroutes" ]
+      verbs: [ "get", "list", "watch" ]
+
+

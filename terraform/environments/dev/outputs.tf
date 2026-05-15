@@ -31,7 +31,23 @@ output "repository_urls" {
   }
 }
 
+output "backend_repository_url" {
+  value = aws_ecr_repository.this["backend"].repository_url
+}
+
+output "frontend_repository_url" {
+  value = aws_ecr_repository.this["frontend"].repository_url
+}
+
+output "backend_secret_name" {
+  value = aws_secretsmanager_secret.backend.name
+}
+
 output "acm_certificate_arn" {
   description = "ACM certificate ARN for voxchat.in"
   value       = aws_acm_certificate_validation.vox.certificate_arn
+}
+
+output "alb_controller_role_arn" {
+  value = aws_iam_role.alb_controller.arn
 }

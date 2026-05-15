@@ -1,45 +1,53 @@
-# voxchat 
 # voxchat
 
-# LBC controller
+## Kubernetes Platform Bootstrap
 
-LBC_ROLE=$(terraform -chdir=terraform/environments/dev output -raw lbc_irsa_role_arn)
-VPC_ID=$(terraform -chdir=terraform/environments/dev output -raw vpc_id)
+The platform now uses AWS Load Balancer Controller Gateway API support, External Secrets Operator, External DNS, and the app charts under `helm/charts`.
 
-helm repo add eks https://aws.github.io/eks-charts && helm repo update
+Install Gateway API CRDs, AWS Load Balancer Controller Gateway CRDs, the ALB controller, and the shared Gateway:
 
-helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
---namespace kube-system \
---set clusterName=vox-dev \
---set serviceAccount.create=true \
---set serviceAccount.name=aws-load-balancer-controller \
---set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${LBC_ROLE}" \
---set region=ap-south-1 \
---set vpcId=${VPC_ID} \
---wait
+```bash
+./scripts/bootstrap-eks.sh
+```
 
-kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
+Install the Helm-managed platform add-ons and app charts. The app image repositories are required because the charts fail fast instead of rendering an invalid `:tag` image:
 
-# Gateway Api
+```bash
+export IMAGE_TAG="<image-tag>"
 
-ACM_ARN=$(terraform -chdir=terraform/environments/dev output -raw acm_certificate_arn)
+./scripts/deploy.sh
+```
 
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml
-kubectl create namespace vox --dry-run=client -o yaml | kubectl apply -f -
+The deploy script reads the backend/frontend ECR repository URLs from Terraform outputs, applies platform resources first, then deploys the app charts. Use `SKIP_TERRAFORM_APPLY=true ./scripts/deploy.sh` when the infrastructure has already been applied.
 
-helm upgrade --install vox-gateway helm/gateway/ \
---namespace vox \
---set acmCertificateArn=${ACM_ARN} \
---wait
+GitHub deployment uses `.github/workflows/deploy.yaml`. Configure these repository secrets before using CI/CD:
 
+- `AWS_ACCOUNT_ID`
+- `AWS_ROLE_ARN`
+- `SONAR_TOKEN`
+- `SONAR_HOST_URL`
 
-# External DNS
+Optional repository variables:
 
-DNS_ROLE=$(terraform -chdir=terraform/environments/dev output -raw external_dns_irsa_role_arn)
+- `VITE_API_URL`, defaults to `https://api.voxchat.in/api`
+- `VITE_CSRF_COOKIE_NAME`, defaults to `vox_csrf`
 
-helm dependency update helm/external-dns/
-helm upgrade --install external-dns helm/external-dns/ \
---namespace external-dns --create-namespace \
---values helm/external-dns/values.yaml \
---set "external-dns.serviceAccount.annotations.eks\.amazonaws\.com/role-arn=${DNS_ROLE}" \
---wait
+You can also deploy the app charts directly:
+
+```bash
+export BACKEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw backend_repository_url)"
+export FRONTEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw frontend_repository_url)"
+export IMAGE_TAG="<image-tag>"
+
+helm upgrade --install voxchat-backend helm/charts/backend \
+  --namespace voxchat --create-namespace \
+  --values helm/values/dev/backend.yaml \
+  --set image.repository="${BACKEND_IMAGE_REPOSITORY}" \
+  --set image.tag="${IMAGE_TAG}"
+
+helm upgrade --install voxchat-frontend helm/charts/frontend \
+  --namespace voxchat --create-namespace \
+  --values helm/values/dev/frontend.yaml \
+  --set image.repository="${FRONTEND_IMAGE_REPOSITORY}" \
+  --set image.tag="${IMAGE_TAG}"
+```

@@ -1,0 +1,24 @@
+{{- if .Values.targetGroupConfiguration.enabled -}}
+apiVersion: gateway.k8s.aws/v1beta1
+kind: TargetGroupConfiguration
+metadata:
+  name: {{ include "backend.serviceName" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  targetReference:
+    name: {{ include "backend.serviceName" . }}
+  defaultConfiguration:
+    targetType: {{ .Values.targetGroupConfiguration.targetType | quote }}
+    protocol: HTTP
+    healthCheckConfig:
+      healthCheckPath: {{ .Values.targetGroupConfiguration.healthCheck.path | quote }}
+      healthCheckPort: {{ .Values.targetGroupConfiguration.healthCheck.port | quote }}
+      healthCheckProtocol: HTTP
+      healthCheckInterval: {{ .Values.targetGroupConfiguration.healthCheck.interval }}
+      healthCheckTimeout: {{ .Values.targetGroupConfiguration.healthCheck.timeout }}
+      healthyThresholdCount: {{ .Values.targetGroupConfiguration.healthCheck.healthyThresholdCount }}
+      unhealthyThresholdCount: {{ .Values.targetGroupConfiguration.healthCheck.unhealthyThresholdCount }}
+      matcher:
+        httpCode: {{ .Values.targetGroupConfiguration.healthCheck.successCodes | quote }}
+{{- end }}

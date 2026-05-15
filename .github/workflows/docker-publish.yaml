@@ -54,13 +54,17 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ── 4. Ensure ECR repo exists (idempotent) ────────────────
+      - name: Set image names
+        run: |
+          echo "ECR_REPOSITORY=voxchat/${{ matrix.service }}" >> "$GITHUB_ENV"
+          echo "IMAGE_URI=${{ env.ECR_REGISTRY }}/voxchat/${{ matrix.service }}:${{ env.IMAGE_TAG }}" >> "$GITHUB_ENV"
+
+      # ── 4. Ensure ECR repo exists ─────────────────────────────
       - name: Ensure ECR repository exists
         run: |
           aws ecr describe-repositories \
-            --repository-names vox-${{ matrix.service }} \
-            --region ${{ env.AWS_REGION }} 2>/dev/null || \
-          echo "✅ ECR repo vox-${{ matrix.service }} ready"
+            --repository-names "${ECR_REPOSITORY}" \
+            --region ${{ env.AWS_REGION }}
 
       # ── 5. Docker Buildx ───────────────────────────────────────
       - name: Set up Docker Buildx
@@ -74,17 +78,19 @@ jobs:
           pull:       true
           push:       false
           load:       true          # load into local daemon for Trivy
-          tags:       ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          tags:       ${{ env.IMAGE_URI }}
           cache-from: type=gha,scope=docker-${{ matrix.service }}
           cache-to:   type=gha,scope=docker-${{ matrix.service }},mode=max
           build-args: |
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ github.event.workflow_run.created_at || github.event.head_commit.timestamp || '' }}
+            GIT_SHA=${{ env.IMAGE_TAG }}
             GIT_BRANCH=${{ github.ref_name }}
+            VITE_API_URL=${{ vars.VITE_API_URL || 'https://api.voxchat.in/api' }}
+            VITE_CSRF_COOKIE_NAME=${{ vars.VITE_CSRF_COOKIE_NAME || 'vox_csrf' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.revision=${{ env.IMAGE_TAG }}
+            org.opencontainers.image.created=${{ github.event.workflow_run.created_at || github.event.head_commit.timestamp || '' }}
             org.opencontainers.image.title=vox-${{ matrix.service }}
 
       # ── 7. Trivy — image vulnerability scan (BLOCKS push) ──────
@@ -101,7 +107,7 @@ jobs:
             --ignore-unfixed \
             --format sarif \
             --output trivy-image-${{ matrix.service }}.sarif \
-            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_URI }}
 
       - name: Trivy — fail on image vulnerabilities
         run: |
@@ -111,7 +117,7 @@ jobs:
             --ignore-unfixed \
             --format table \
             --exit-code 1 \
-            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_URI }}
 
       - name: Upload Trivy image SARIF → GitHub Security
         uses: github/codeql-action/upload-sarif@v4
@@ -126,7 +132,7 @@ jobs:
 
       - name: Generate SBOM with Syft
         run: |
-          syft ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }} \
+          syft "${IMAGE_URI}" \
             --output spdx-json \
             --file sbom-${{ matrix.service }}.spdx.json
           echo "📦 SBOM generated: sbom-${{ matrix.service }}.spdx.json"
@@ -142,16 +148,9 @@ jobs:
           retention-days: 90          # keep SBOMs long-term for compliance
 
       # ── 9. Push the scanned local image to ECR ─────────────────
-      - name: Tag scanned image for branch alias
-        run: |
-          docker tag \
-            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }} \
-            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ github.ref_name }}-latest
-
       - name: Push image to ECR
         run: |
-          docker push ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
-          docker push ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ github.ref_name }}-latest
+          docker push "${IMAGE_URI}"
 
       # ── 10. Cosign — keyless image signing + SBOM attestation ──
       - name: Install Cosign
@@ -160,7 +159,7 @@ jobs:
       - name: Cosign sign image (keyless via Sigstore/Fulcio)
         run: |
           cosign sign --yes \
-            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            "${IMAGE_URI}"
         env:
           COSIGN_EXPERIMENTAL: "1"   # enables keyless (OIDC-based) signing
 
@@ -169,7 +168,7 @@ jobs:
           cosign attest --yes \
             --predicate sbom-${{ matrix.service }}.spdx.json \
             --type spdxjson \
-            ${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            "${IMAGE_URI}"
         env:
           COSIGN_EXPERIMENTAL: "1"
 
@@ -186,7 +185,7 @@ jobs:
           echo "| Cosign sign        | ✅ Signed |" >> $GITHUB_STEP_SUMMARY
           echo "| Cosign attest SBOM | ✅ Attested |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.ECR_REGISTRY }}/vox-${{ matrix.service }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${IMAGE_URI}\`" >> $GITHUB_STEP_SUMMARY
 
   # ── Gate ─────────────────────────────────────────────────────────
   gate:

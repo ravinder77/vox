@@ -1,0 +1,30 @@
+{{- if .Values.schemaJob.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "backend.fullname" . }}-schema
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "backend.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "backend.serviceAccountName" . }}
+      containers:
+        - name: schema
+          image: "{{ required "backend image.repository is required" .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.schemaJob.command | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ include "backend.secretName" . }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

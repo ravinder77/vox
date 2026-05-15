@@ -43,7 +43,7 @@ export default function Sidebar({
       <div className="sidebar-top">
         <div className="logo">
           <div className="logo-icon">💬</div>
-          <span className="logo-text">Vox</span>
+          <span className="logo-text">Voxchat</span>
         </div>
         <div className="header-actions">
           <IconButton title="New chat" onClick={toggleNewChat}>

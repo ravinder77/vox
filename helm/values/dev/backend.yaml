@@ -1,0 +1,158 @@
+
+replicaCount: 1
+
+image:
+  repository:
+  pullPolicy: IfNotPresent
+  tag: ""
+
+containerPort: 4000
+
+# This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
+# This is to override the chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+
+# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: "voxchat-backend-sa"
+
+# This is for setting Kubernetes Annotations to a Pod.
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+
+# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+service:
+  name: voxchat-backend-svc
+  type: ClusterIP
+  port: 80
+
+
+httpRoute:
+  enabled: true
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: api.voxchat.in
+
+  parentRefs:
+    - name: voxchat-gateway
+      sectionName: https
+      namespace: voxchat
+  # Hostnames matching HTTP header.
+  hostnames:
+    - api.voxchat.in
+  # List of rules and filters applied.
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+
+# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+volumes: []
+
+volumeMounts: []
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+
+externalSecret:
+  enabled: true
+
+  store:
+    name: aws-secrets-store
+    kind: ClusterSecretStore
+
+  refreshInterval: 1h
+
+  source:
+    key: voxchat/dev/backend
+
+  target:
+    name: voxchat-backend-env
+
+  secrets:
+    - secretKey: DATABASE_URL
+      property: DATABASE_URL
+
+    - secretKey: JWT_SECRET
+      property: JWT_SECRET
+
+    - secretKey: JWT_EXPIRES_IN
+      property: JWT_EXPIRES_IN
+
+    - secretKey: COOKIE_NAME
+      property: COOKIE_NAME
+
+    - secretKey: CSRF_COOKIE_NAME
+      property: CSRF_COOKIE_NAME
+
+    - secretKey: CLIENT_ORIGIN
+      property: CLIENT_ORIGIN
+
+schemaJob:
+  enabled: true
+  command:
+    - npx
+    - prisma
+    - migrate
+    - deploy
+
+targetGroupConfiguration:
+  enabled: true
+  targetType: ip
+  healthCheck:
+    path: /health
+    port: traffic-port
+    interval: 15
+    timeout: 5
+    healthyThresholdCount: 2
+    unhealthyThresholdCount: 2
+    successCodes: "200"

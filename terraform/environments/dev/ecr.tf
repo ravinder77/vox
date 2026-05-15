@@ -47,11 +47,11 @@ resource "aws_ecr_repository" "this" {
   for_each = local.repositories
 
   name                 = "${var.project}/${each.key}"
-  image_tag_mutability = "IMMUTABLE"  # tags cannot be overwritten — enforces digest-based deploys
-  force_delete = false
+  image_tag_mutability = "IMMUTABLE" # tags cannot be overwritten — enforces digest-based deploys
+  force_delete         = false
 
   image_scanning_configuration {
-    scan_on_push = true   # automatic vulnerability scan on every push
+    scan_on_push = true # automatic vulnerability scan on every push
   }
 
   encryption_configuration {
