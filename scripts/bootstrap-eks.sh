@@ -1,9 +1,12 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
+
+AWS_REGION="${AWS_REGION:-ap-south-1}"
+CLUSTER_NAME="${CLUSTER_NAME:-voxchat-eks}"
 
 echo "==> 1. Updating kubeconfig"
-aws eks update-kubeconfig --name voxchat-eks --region ap-south-1
+aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
 
 echo "==> 2. Installing Gateway API CRDs"
 bash scripts/install-crds.sh
@@ -21,6 +24,7 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   -n kube-system \
   --version 1.14.1 \
   -f helm/values/gateway.yaml \
+  --set clusterName="${CLUSTER_NAME}" \
   --wait
 
 echo "==> 5. Applying GatewayClass"

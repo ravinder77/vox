@@ -8,7 +8,7 @@ spec:
     targetType: ip
     targetGroupAttributes:
       - key: deregistration_delay.timeout_seconds
-        value: "30"
+        value: "60"
 ---
 apiVersion: gateway.k8s.aws/v1beta1
 kind: LoadBalancerConfiguration

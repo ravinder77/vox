@@ -30,14 +30,17 @@ export FRONTEND_IMAGE_REPOSITORY="${FRONTEND_IMAGE_REPOSITORY:-$(terraform -chdi
 export IMAGE_TAG
 
 CLUSTER_NAME="$(terraform -chdir="${TERRAFORM_DIR}" output -raw cluster_name)"
+export CLUSTER_NAME
 aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
 
 ./scripts/bootstrap-eks.sh
 
-helmfile -l tier=platform apply
+HELMFILE_ENVIRONMENT="${HELMFILE_ENVIRONMENT:-${ENVIRONMENT:-dev}}"
+
+helmfile --environment "${HELMFILE_ENVIRONMENT}" -l tier=platform apply
 
 kubectl apply -f platform/external-secrets/cluster-secret-store.yaml
 kubectl apply -f platform/gateway-api/gatewayclass.yaml
 kubectl apply -f platform/gateway-api/gateway.yaml
 
-helmfile apply
+helmfile --environment "${HELMFILE_ENVIRONMENT}" apply

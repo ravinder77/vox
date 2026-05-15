@@ -1,6 +1,6 @@
 
 replicaCount: 1
-clusterName: voxchat-eks
+clusterName:
 
 serviceAccount:
   create: true

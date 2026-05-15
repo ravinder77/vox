@@ -13,7 +13,9 @@
     "test:ci": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --ci",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "engines": {
     "node": ">=22"

@@ -1,5 +1,31 @@
 # voxchat
 
+## Local Development
+
+Copy the example environment files before running locally:
+
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Run the local Postgres, backend, and frontend stack:
+
+```bash
+docker compose up --build
+```
+
+Useful project checks are also available through `make`:
+
+```bash
+make install
+make typecheck
+make test
+make build
+make helm-template
+```
+
 ## Kubernetes Platform Bootstrap
 
 The platform now uses AWS Load Balancer Controller Gateway API support, External Secrets Operator, External DNS, and the app charts under `helm/charts`.
@@ -26,6 +52,7 @@ GitHub deployment uses `.github/workflows/deploy.yaml`. Configure these reposito
 - `AWS_ROLE_ARN`
 - `SONAR_TOKEN`
 - `SONAR_HOST_URL`
+- `GRAFANA_ADMIN_PASSWORD`
 
 Optional repository variables:
 

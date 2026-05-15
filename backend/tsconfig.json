@@ -16,5 +16,5 @@
     "types": ["node", "jest"]
   },
   "include": ["src/**/*.ts",
-    "tests/**/*.ts", "prisma.config.ts"]
+    "tests/**/*.ts", "prisma/**/*.ts", "prisma.config.ts"]
 }

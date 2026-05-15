@@ -1,6 +1,8 @@
 
+replicaCount: 1
+
 image:
-  repository:
+  repository: ""
   pullPolicy: IfNotPresent
   tag: ""
 
@@ -11,6 +13,7 @@ imagePullSecrets: []
 # This is to override the chart name.
 nameOverride: ""
 fullnameOverride: ""
+
 
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
@@ -84,13 +87,13 @@ readinessProbe:
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
   enabled: true
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 5
   targetCPUUtilizationPercentage: 80
   targetMemoryUtilizationPercentage: 80
 
 podDisruptionBudget:
-  enabled: true
+  enabled: false
   minAvailable: 1
 
 volumes: []
@@ -103,32 +106,39 @@ tolerations: []
 
 affinity: {}
 
+
 externalSecret:
   enabled: true
+
   store:
     name: aws-secrets-store
     kind: ClusterSecretStore
+
   refreshInterval: 1h
+
+  source:
+    key: voxchat/dev/backend
+
   target:
     name: voxchat-backend-env
+
   secrets:
     - secretKey: DATABASE_URL
-      remoteKey: voxchat/prod/backend
       property: DATABASE_URL
+
     - secretKey: JWT_SECRET
-      remoteKey: voxchat/prod/backend
       property: JWT_SECRET
+
     - secretKey: JWT_EXPIRES_IN
-      remoteKey: voxchat/prod/backend
       property: JWT_EXPIRES_IN
+
     - secretKey: COOKIE_NAME
-      remoteKey: voxchat/prod/backend
       property: COOKIE_NAME
+
     - secretKey: CSRF_COOKIE_NAME
-      remoteKey: voxchat/prod/backend
       property: CSRF_COOKIE_NAME
+
     - secretKey: CLIENT_ORIGIN
-      remoteKey: voxchat/prod/backend
       property: CLIENT_ORIGIN
 
 schemaJob:

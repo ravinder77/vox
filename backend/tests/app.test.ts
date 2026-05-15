@@ -20,6 +20,21 @@ describe('backend app', () => {
     );
   });
 
+  it('returns a ready response from /ready', async () => {
+    const response = await request(app).get('/ready');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      message: 'Vox backend is ready',
+    });
+    expect(response.body.data).toEqual(
+      expect.objectContaining({
+        timestamp: expect.any(String),
+      }),
+    );
+  });
+
   it('rejects forgot-password requests with invalid email', async () => {
     const response = await request(app)
       .post('/api/auth/forgot-password')

@@ -8,6 +8,14 @@ repositories:
   - name: prometheus-community
     url: https://prometheus-community.github.io/helm-charts
 
+environments:
+  dev:
+    values:
+      - environment: dev
+  prod:
+    values:
+      - environment: prod
+
 releases:
   - name: aws-load-balancer-controller
     namespace: kube-system
@@ -18,6 +26,9 @@ releases:
     createNamespace: true
     values:
       - helm/values/gateway.yaml
+    set:
+      - name: clusterName
+        value: '{{ requiredEnv "CLUSTER_NAME" }}'
     wait: true
 
   - name: voxchat-monitoring
@@ -29,6 +40,9 @@ releases:
     createNamespace: true
     values:
       - helm/values/kube-prometheus-stack.yaml
+    set:
+      - name: grafana.adminPassword
+        value: '{{ requiredEnv "GRAFANA_ADMIN_PASSWORD" }}'
     wait: true
 
   - name: external-secrets
@@ -64,7 +78,7 @@ releases:
       tier: app
     createNamespace: true
     values:
-      - helm/values/dev/backend.yaml
+      - helm/values/{{ .Environment.Values.environment }}/backend.yaml
     set:
       - name: image.repository
         value: '{{ requiredEnv "BACKEND_IMAGE_REPOSITORY" }}'
@@ -81,7 +95,7 @@ releases:
       tier: app
     createNamespace: true
     values:
-      - helm/values/dev/frontend.yaml
+      - helm/values/{{ .Environment.Values.environment }}/frontend.yaml
     set:
       - name: image.repository
         value: '{{ requiredEnv "FRONTEND_IMAGE_REPOSITORY" }}'

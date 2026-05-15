@@ -32,6 +32,16 @@ export function createApp() {
     });
   });
 
+  app.get('/ready', (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      message: 'Vox backend is ready',
+      data: {
+        timestamp: new Date().toISOString(),
+      },
+    });
+  });
+
   app.use('/api', (_req: Request, res: Response, next) => {
     res.set('Cache-Control', 'no-store');
     next();

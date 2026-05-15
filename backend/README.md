@@ -21,13 +21,13 @@ Express backend for the chat UI in `frontend/`.
 npm install
 ```
 
-2. Update the existing `.env` file and configure Postgres:
+2. Create `.env` from `.env.example` and configure Postgres:
 
-3. Generate Prisma client, create tables, and seed demo data:
+3. Generate Prisma client, apply migrations, and seed demo data:
 
 ```bash
 npm run db:generate
-npm run db:push
+npm run db:migrate
 npm run db:seed
 ```
 
@@ -43,7 +43,9 @@ The API defaults to `http://localhost:4000`.
 
 The backend uses PostgreSQL via Prisma. Set `DATABASE_URL` and a strong `JWT_SECRET` in `.env` before running the Prisma commands.
 
-Conversations are scoped to authenticated participants. The seed gives both demo users access to the demo chats; newly created users start with an empty workspace until conversations are assigned to them.
+Conversations are scoped to authenticated participants. The seed gives demo users access to the demo chats; newly created users start with an empty workspace until conversations are assigned to them.
+
+The default seeded password is `Password123!`. Override it with `SEED_PASSWORD`.
 
 Tables created from the Prisma schema:
 
