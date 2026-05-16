@@ -101,6 +101,17 @@ describe('App', () => {
     });
   });
 
+  it('keeps signed-out users on signup while probing the session', async () => {
+    mockApiGet.mockRejectedValue(new Error('Unauthorized'));
+
+    renderApp(['/signup']);
+
+    await waitFor(() => {
+      expect(screen.getByText('Auth Mode: signup')).toBeInTheDocument();
+      expect(mockApiGet).toHaveBeenCalledWith('/auth/me', { suppressUnauthorizedEvent: true });
+    });
+  });
+
   it('redirects home after restoring a session', async () => {
     mockApiGet.mockResolvedValue({
       data: { id: '1', name: 'Alex', email: 'alex@example.com', username: 'alex', initials: 'A', role: 'Member', status: 'online' },

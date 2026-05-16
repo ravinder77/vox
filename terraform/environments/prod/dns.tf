@@ -35,7 +35,7 @@ resource "aws_route53_record" "cert_validation" {
 }
 
 # Wait for ACM to validate — outputs the final cert ARN
-resource "aws_acm_certificate_validation" "vox" {
+resource "aws_acm_certificate_validation" "voxchat" {
   certificate_arn = aws_acm_certificate.voxchat.arn
   validation_record_fqdns = [
     for r in aws_route53_record.cert_validation : r.fqdn

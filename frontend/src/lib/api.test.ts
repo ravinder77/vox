@@ -76,6 +76,24 @@ describe('api', () => {
         window.removeEventListener('auth:unauthorized', onUnauthorized);
     });
 
+    it('can suppress unauthorized events for intentional session probes', async () => {
+        const onUnauthorized = vi.fn();
+        window.addEventListener('auth:unauthorized', onUnauthorized);
+
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 401,
+            statusText: 'Unauthorized',
+            headers: { get: () => 'application/json' },
+            json: async () => ({ success: false, message: 'Unauthorized', data: {} }),
+        } as unknown as Response);
+
+        await expect(api.get('/auth/me', { suppressUnauthorizedEvent: true })).rejects.toThrow('Unauthorized');
+        expect(onUnauthorized).not.toHaveBeenCalled();
+
+        window.removeEventListener('auth:unauthorized', onUnauthorized);
+    });
+
     it('falls back to status text for non-json failures', async () => {
         globalThis.fetch = vi.fn().mockResolvedValue({
             ok: false,

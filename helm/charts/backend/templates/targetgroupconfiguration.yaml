@@ -14,7 +14,7 @@ spec:
     healthCheckConfig:
       healthCheckPath: {{ .Values.targetGroupConfiguration.healthCheck.path | quote }}
       healthCheckPort: {{ .Values.targetGroupConfiguration.healthCheck.port | quote }}
-      healthCheckProtocol: HTTP
+      healthCheckProtocol: http
       healthCheckInterval: {{ .Values.targetGroupConfiguration.healthCheck.interval }}
       healthCheckTimeout: {{ .Values.targetGroupConfiguration.healthCheck.timeout }}
       healthyThresholdCount: {{ .Values.targetGroupConfiguration.healthCheck.healthyThresholdCount }}

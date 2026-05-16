@@ -82,6 +82,14 @@ resource "aws_vpc_security_group_egress_rule" "eks_nodes_egress" {
 # RDS SECURITY GROUP
 # ------------------------
 
+locals {
+  rds_client_security_group_ids = toset(compact([
+    aws_security_group.eks_nodes.id,
+    module.eks.node_security_group_id,
+    module.eks.cluster_primary_security_group_id,
+  ]))
+}
+
 resource "aws_security_group" "rds" {
 
   name        = "vox-rds-sg"
@@ -92,6 +100,8 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "eks_to_rds" {
+  for_each = local.rds_client_security_group_ids
+
   security_group_id = aws_security_group.rds.id
   description       = "PostgreSQL from EKS"
 
@@ -99,7 +109,7 @@ resource "aws_vpc_security_group_ingress_rule" "eks_to_rds" {
   to_port   = 5432
 
   ip_protocol                  = "tcp"
-  referenced_security_group_id = aws_security_group.eks_nodes.id
+  referenced_security_group_id = each.value
 }
 
 resource "aws_vpc_security_group_egress_rule" "rds_egress" {

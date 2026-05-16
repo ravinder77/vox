@@ -34,6 +34,7 @@ backend-seed:
 	cd backend && npm run db:seed
 
 helm-template:
+	helm template voxchat-gateway helm/charts/gateway --namespace voxchat --set acmCertificateArn=arn:aws:acm:ap-south-1:123456789012:certificate/example >/dev/null
 	helm template voxchat-backend helm/charts/backend --namespace voxchat --values helm/values/dev/backend.yaml --set image.repository=example.com/vox-backend --set image.tag=test >/dev/null
 	helm template voxchat-frontend helm/charts/frontend --namespace voxchat --values helm/values/dev/frontend.yaml --set image.repository=example.com/vox-frontend --set image.tag=test >/dev/null
 

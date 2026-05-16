@@ -2,16 +2,17 @@
 replicaCount: 1
 clusterName:
 
+region: ap-south-1
+vpcId: vpc-0a55df58139405b3a
+
 serviceAccount:
   create: true
   name: aws-load-balancer-controller
-  annotations: {}
 
 controllerConfig:
   featureGates:
     ALBGatewayAPI: true
     NLBGatewayAPI: false
-    GatewayListenerSet: false
 
 resources:
   requests:

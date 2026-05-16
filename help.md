@@ -1,6 +1,8 @@
 # Voxchat AWS Deployment Guide
 
-This guide deploys Voxchat to AWS using Terraform, ECR, EKS, Helmfile, Gateway API, External Secrets Operator, ExternalDNS, and AWS Load Balancer Controller.
+This guide deploys Voxchat to AWS using Terraform, ECR, EKS, Helm, Gateway API, External Secrets Operator, ExternalDNS, and AWS Load Balancer Controller.
+
+Helmfile is not used in this deployment flow. Do not run `./scripts/deploy.sh` for this guide because that script calls `helmfile`.
 
 ## 1. Prerequisites
 
@@ -11,13 +13,12 @@ aws --version
 docker --version
 kubectl version --client
 helm version
-helmfile --version
 terraform version
 node --version
 npm --version
 ```
 
-Expected versions:
+Expected local runtime:
 
 ```bash
 node 24.x
@@ -25,13 +26,7 @@ terraform 1.15.3
 helm 4.x
 ```
 
-Install Helmfile on macOS if missing:
-
-```bash
-brew install helmfile
-```
-
-Authenticate AWS:
+Authenticate to AWS:
 
 ```bash
 aws configure sso
@@ -39,17 +34,38 @@ aws sso login
 aws sts get-caller-identity
 ```
 
-## 2. Prepare Local Environment
+## 2. Choose Environment
 
-Create local env files:
+For dev:
 
 ```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
+cd /Users/ravinder/Projects/voxchat
+
+export AWS_REGION=ap-south-1
+export TERRAFORM_DIR=terraform/environments/dev
+export ENVIRONMENT=dev
 ```
 
-Install dependencies and verify the app:
+For prod:
+
+```bash
+cd /Users/ravinder/Projects/voxchat
+
+export AWS_REGION=ap-south-1
+export TERRAFORM_DIR=terraform/environments/prod
+export ENVIRONMENT=prod
+```
+
+Before deploying prod, confirm `terraform/environments/prod/terraform.tfvars` contains:
+
+```hcl
+environment = "prod"
+github_repo = "voxchat"
+```
+
+## 3. Verify App Locally
+
+Install dependencies and run checks:
 
 ```bash
 make install
@@ -70,15 +86,21 @@ Open:
 http://localhost:5173
 ```
 
-## 3. Configure Terraform Variables
-
-Edit:
+Stop local containers when finished:
 
 ```bash
-terraform/environments/dev/terraform.tfvars
+docker compose down
 ```
 
-At minimum, confirm these values:
+## 4. Configure Terraform Variables
+
+Edit the selected environment file:
+
+```bash
+$TERRAFORM_DIR/terraform.tfvars
+```
+
+At minimum, confirm:
 
 ```hcl
 aws_region       = "ap-south-1"
@@ -86,18 +108,14 @@ environment      = "dev"
 eks_cluster_name = "voxchat-eks"
 domain_name      = "voxchat.in"
 github_org       = "ravinder77"
-github_repo      = "vox"
+github_repo      = "voxchat"
 ```
 
-If starting from scratch:
+Use `environment = "prod"` only when deploying prod.
 
-```bash
-cp terraform/environments/dev/terraform.tfvars.example terraform/environments/dev/terraform.tfvars
-```
+## 5. Create Terraform State Bucket
 
-## 4. Create Terraform State Bucket
-
-The dev backend expects this S3 bucket:
+The Terraform backend expects this S3 bucket:
 
 ```bash
 aws s3api create-bucket \
@@ -114,191 +132,418 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled
 ```
 
-## 5. Provision AWS Infrastructure
+If the bucket already exists, continue.
 
-Initialize and apply Terraform:
+## 6. Provision AWS Infrastructure
+
+Initialize, format, validate, and apply Terraform:
 
 ```bash
-terraform -chdir=terraform/environments/dev init
-terraform -chdir=terraform/environments/dev fmt
-terraform -chdir=terraform/environments/dev validate
-terraform -chdir=terraform/environments/dev apply
+terraform -chdir="$TERRAFORM_DIR" init
+terraform -chdir="$TERRAFORM_DIR" fmt
+terraform -chdir="$TERRAFORM_DIR" validate
+terraform -chdir="$TERRAFORM_DIR" apply
 ```
 
 Save useful outputs:
 
 ```bash
-export AWS_REGION=ap-south-1
-export CLUSTER_NAME="$(terraform -chdir=terraform/environments/dev output -raw cluster_name)"
-export BACKEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw backend_repository_url)"
-export FRONTEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw frontend_repository_url)"
+export CLUSTER_NAME="$(terraform -chdir="$TERRAFORM_DIR" output -raw cluster_name)"
+export BACKEND_IMAGE_REPOSITORY="$(terraform -chdir="$TERRAFORM_DIR" output -raw backend_repository_url)"
+export FRONTEND_IMAGE_REPOSITORY="$(terraform -chdir="$TERRAFORM_DIR" output -raw frontend_repository_url)"
+export ROUTE53_ZONE_ID="$(terraform -chdir="$TERRAFORM_DIR" output -raw route53_zone_id)"
+export ACM_CERTIFICATE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw acm_certificate_arn)"
+
+echo "$CLUSTER_NAME"
+echo "$BACKEND_IMAGE_REPOSITORY"
+echo "$FRONTEND_IMAGE_REPOSITORY"
+echo "$ROUTE53_ZONE_ID"
+echo "$ACM_CERTIFICATE_ARN"
 ```
 
 Update kubeconfig:
 
 ```bash
-aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
+aws eks update-kubeconfig \
+  --name "$CLUSTER_NAME" \
+  --region "$AWS_REGION"
+
 kubectl get nodes
 ```
 
-## 6. Configure DNS
+## 7. Configure DNS
 
-Terraform creates the Route 53 hosted zone and ACM certificate records. Get the hosted zone name servers:
+Terraform creates the Route 53 hosted zone and ACM certificate validation records.
+
+Get the Route 53 name servers:
 
 ```bash
 aws route53 get-hosted-zone \
-  --id "$(terraform -chdir=terraform/environments/dev output -raw route53_zone_id)"
+  --id "$ROUTE53_ZONE_ID" \
+  --query 'DelegationSet.NameServers' \
+  --output table
 ```
 
-At your domain registrar, set the domain name servers to the Route 53 name servers.
+In GoDaddy, set the domain name servers to the Route 53 name servers.
 
-Wait until DNS delegates correctly:
+Wait until delegation is correct:
 
 ```bash
 dig NS voxchat.in
 ```
 
-## 7. Build and Push Images Manually
-
-Use a unique immutable image tag:
+Check ACM certificate validation:
 
 ```bash
-export IMAGE_TAG="$(git rev-parse HEAD)"
+aws acm list-certificates --region "$AWS_REGION"
+```
+
+## 8. Build And Push Docker Images
+
+Use a unique tag because the ECR repositories are immutable:
+
+```bash
+export IMAGE_TAG="sha-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M%S)"
+echo "$IMAGE_TAG"
 ```
 
 Log in to ECR:
 
 ```bash
-aws ecr get-login-password --region "${AWS_REGION}" \
-  | docker login --username AWS --password-stdin "${BACKEND_IMAGE_REPOSITORY%/*}"
+aws ecr get-login-password --region "$AWS_REGION" \
+  | docker login \
+    --username AWS \
+    --password-stdin "$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com"
 ```
 
-Build and push backend:
+Build and push backend for the EKS node platform:
 
 ```bash
-docker build \
-  -t "${BACKEND_IMAGE_REPOSITORY}:${IMAGE_TAG}" \
+docker buildx build \
+  --platform linux/amd64 \
+  -t "$BACKEND_IMAGE_REPOSITORY:$IMAGE_TAG" \
+  --push \
   backend
-
-docker push "${BACKEND_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 ```
 
-Build and push frontend:
+Build and push frontend for the EKS node platform:
 
 ```bash
-docker build \
+docker buildx build \
+  --platform linux/amd64 \
   --build-arg VITE_API_URL=https://api.voxchat.in/api \
   --build-arg VITE_CSRF_COOKIE_NAME=vox_csrf \
-  -t "${FRONTEND_IMAGE_REPOSITORY}:${IMAGE_TAG}" \
+  -t "$FRONTEND_IMAGE_REPOSITORY:$IMAGE_TAG" \
+  --push \
   frontend
-
-docker push "${FRONTEND_IMAGE_REPOSITORY}:${IMAGE_TAG}"
 ```
 
-## 8. Deploy Platform and App
-
-Set required deployment variables:
+Confirm images exist:
 
 ```bash
-export AWS_REGION=ap-south-1
-export TERRAFORM_DIR=terraform/environments/dev
-export ENVIRONMENT=dev
-export HELMFILE_ENVIRONMENT=dev
+aws ecr describe-images \
+  --repository-name voxchat/backend \
+  --image-ids imageTag="$IMAGE_TAG" \
+  --region "$AWS_REGION"
+
+aws ecr describe-images \
+  --repository-name voxchat/frontend \
+  --image-ids imageTag="$IMAGE_TAG" \
+  --region "$AWS_REGION"
+```
+
+## 9. Create Kubernetes Namespaces
+
+```bash
+kubectl create namespace voxchat --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace external-dns --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+```
+
+## 10. Install Gateway API CRDs
+
+Install Gateway API CRDs:
+
+```bash
+kubectl apply --server-side=true \
+  -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.5.1/standard-install.yaml
+```
+
+Install AWS Load Balancer Controller Gateway API CRDs:
+
+```bash
+kubectl apply \
+  -f https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.14.1/config/crd/gateway/gateway-crds.yaml
+```
+
+Wait for CRDs:
+
+```bash
+kubectl wait --for=condition=established \
+  crd/gateways.gateway.networking.k8s.io \
+  crd/httproutes.gateway.networking.k8s.io \
+  crd/grpcroutes.gateway.networking.k8s.io \
+  crd/loadbalancerconfigurations.gateway.k8s.aws \
+  crd/targetgroupconfigurations.gateway.k8s.aws \
+  crd/listenerruleconfigurations.gateway.k8s.aws \
+  --timeout=60s
+```
+
+## 11. Add Helm Repositories
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+helm repo add external-secrets https://charts.external-secrets.io
+helm repo add external-dns https://kubernetes-sigs.github.io/external-dns
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+```
+
+## 12. Install Platform With Helm
+
+Set Grafana admin password:
+
+```bash
 export GRAFANA_ADMIN_PASSWORD='replace-with-a-strong-password'
-export IMAGE_TAG="$(git rev-parse HEAD)"
 ```
 
-Deploy everything:
+Install AWS Load Balancer Controller:
 
 ```bash
-./scripts/deploy.sh
+helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --namespace kube-system \
+  --version 1.14.1 \
+  --values helm/values/gateway.yaml \
+  --set clusterName="$CLUSTER_NAME" \
+  --wait
 ```
 
-If Terraform has already been applied:
+Install monitoring:
 
 ```bash
-SKIP_TERRAFORM_APPLY=true ./scripts/deploy.sh
+helm upgrade --install voxchat-monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --version 58.x.x \
+  --values helm/values/kube-prometheus-stack.yaml \
+  --set grafana.adminPassword="$GRAFANA_ADMIN_PASSWORD" \
+  --wait
 ```
 
-## 9. Deploy Only App Charts
-
-Use this after platform components are already installed:
+Install External Secrets Operator:
 
 ```bash
-export BACKEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw backend_repository_url)"
-export FRONTEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw frontend_repository_url)"
-export IMAGE_TAG="$(git rev-parse HEAD)"
-
-helm upgrade --install voxchat-backend helm/charts/backend \
-  --namespace voxchat --create-namespace \
-  --values helm/values/dev/backend.yaml \
-  --set image.repository="${BACKEND_IMAGE_REPOSITORY}" \
-  --set image.tag="${IMAGE_TAG}"
-
-helm upgrade --install voxchat-frontend helm/charts/frontend \
-  --namespace voxchat --create-namespace \
-  --values helm/values/dev/frontend.yaml \
-  --set image.repository="${FRONTEND_IMAGE_REPOSITORY}" \
-  --set image.tag="${IMAGE_TAG}"
+helm upgrade --install external-secrets external-secrets/external-secrets \
+  --namespace external-secrets \
+  --create-namespace \
+  --version 2.3.0 \
+  --values helm/values/external-secrets.yaml \
+  --wait
 ```
 
-## 10. Verify Deployment
-
-Check namespaces and pods:
+Install ExternalDNS:
 
 ```bash
-kubectl get ns
-kubectl get pods -A
-kubectl get pods -n voxchat
+helm upgrade --install external-dns external-dns/external-dns \
+  --namespace external-dns \
+  --create-namespace \
+  --version 1.21.1 \
+  --values helm/values/external-dns.yaml \
+  --wait
+```
+
+## 13. Install Shared Platform Resources
+
+```bash
+kubectl apply -f platform/external-secrets/cluster-secret-store.yaml
+
+helm upgrade --install voxchat-gateway helm/charts/gateway \
+  --namespace voxchat \
+  --create-namespace \
+  --set acmCertificateArn="$ACM_CERTIFICATE_ARN" \
+  --wait
+```
+
+The Gateway chart intentionally does not include `spec.listeners[].tls.certificateRefs`. AWS Load Balancer Controller Gateway API support uses the ACM certificate ARN from `LoadBalancerConfiguration.listenerConfigurations[].defaultCertificate`.
+
+If you previously applied the Gateway resources with `kubectl`, Helm may refuse to install because the resources already exist without Helm ownership metadata. For a fresh setup, delete those old resources once and rerun the Helm command:
+
+```bash
+kubectl delete gateway voxchat-gateway -n voxchat --ignore-not-found
+kubectl delete loadbalancerconfiguration voxchat-gateway-lb -n voxchat --ignore-not-found
+kubectl delete gatewayclass voxchat-gateway-class --ignore-not-found
+
+helm upgrade --install voxchat-gateway helm/charts/gateway \
+  --namespace voxchat \
+  --create-namespace \
+  --set acmCertificateArn="$ACM_CERTIFICATE_ARN" \
+  --wait
+```
+
+Verify platform resources:
+
+```bash
+kubectl get pods -n kube-system | grep aws-load-balancer-controller
+kubectl get pods -n external-secrets
+kubectl get pods -n external-dns
+kubectl get gatewayclass
 kubectl get gateway -n voxchat
+```
+
+## 14. Deploy App With Helm
+
+Deploy backend:
+
+```bash
+helm upgrade --install voxchat-backend helm/charts/backend \
+  --namespace voxchat \
+  --create-namespace \
+  --values "helm/values/$ENVIRONMENT/backend.yaml" \
+  --set image.repository="$BACKEND_IMAGE_REPOSITORY" \
+  --set image.tag="$IMAGE_TAG" \
+  --wait
+```
+
+Deploy frontend:
+
+```bash
+helm upgrade --install voxchat-frontend helm/charts/frontend \
+  --namespace voxchat \
+  --create-namespace \
+  --values "helm/values/$ENVIRONMENT/frontend.yaml" \
+  --set image.repository="$FRONTEND_IMAGE_REPOSITORY" \
+  --set image.tag="$IMAGE_TAG" \
+  --wait
+```
+
+## 15. Verify Deployment
+
+Check workloads and routing:
+
+```bash
+kubectl get pods -n voxchat
+kubectl get svc -n voxchat
+kubectl get hpa -n voxchat
 kubectl get httproute -n voxchat
+kubectl get gateway -n voxchat
 kubectl get externalsecret -n voxchat
 kubectl get targetgroupconfiguration -n voxchat
 ```
 
-Check backend health:
+Check rollout status:
+
+```bash
+kubectl rollout status deployment/voxchat-backend -n voxchat
+kubectl rollout status deployment/voxchat-frontend -n voxchat
+```
+
+Check backend logs:
+
+```bash
+kubectl logs -n voxchat deploy/voxchat-backend --tail=100
+```
+
+Check frontend logs:
+
+```bash
+kubectl logs -n voxchat deploy/voxchat-frontend --tail=100
+```
+
+Check backend health inside the cluster:
 
 ```bash
 kubectl port-forward -n voxchat svc/voxchat-backend-svc 4000:80
+```
+
+In another terminal:
+
+```bash
 curl http://localhost:4000/health
 curl http://localhost:4000/ready
 ```
 
-Check public DNS:
+Check public DNS and HTTPS:
 
 ```bash
 dig voxchat.in
 dig api.voxchat.in
 curl -I https://voxchat.in
 curl https://api.voxchat.in/health
+curl https://api.voxchat.in/ready
 ```
 
-## 11. GitHub Actions Setup
-
-Configure repository secrets:
+Expected public URLs:
 
 ```text
-AWS_ACCOUNT_ID
-AWS_ROLE_ARN
-SONAR_TOKEN
-SONAR_HOST_URL
-GRAFANA_ADMIN_PASSWORD
+https://voxchat.in
+https://api.voxchat.in
 ```
 
-Optional repository variables:
+## 16. Upgrade App After Code Changes
 
-```text
-VITE_API_URL=https://api.voxchat.in/api
-VITE_CSRF_COOKIE_NAME=voxchat_csrf
-```
-
-Push to `dev` or `main` to run CI/CD:
+Build and push a new immutable image tag:
 
 ```bash
-git push origin dev
+export IMAGE_TAG="sha-$(git rev-parse --short HEAD)-$(date +%Y%m%d%H%M%S)"
+
+docker buildx build \
+  --platform linux/amd64 \
+  -t "$BACKEND_IMAGE_REPOSITORY:$IMAGE_TAG" \
+  --push \
+  backend
+
+docker buildx build \
+  --platform linux/amd64 \
+  --build-arg VITE_API_URL=https://api.voxchat.in/api \
+  --build-arg VITE_CSRF_COOKIE_NAME=vox_csrf \
+  -t "$FRONTEND_IMAGE_REPOSITORY:$IMAGE_TAG" \
+  --push \
+  frontend
 ```
 
-## 12. Useful Operations
+Upgrade the app:
+
+```bash
+kubectl delete job voxchat-backend-schema -n voxchat --ignore-not-found
+
+helm upgrade --install voxchat-backend helm/charts/backend \
+  --namespace voxchat \
+  --values "helm/values/$ENVIRONMENT/backend.yaml" \
+  --set image.repository="$BACKEND_IMAGE_REPOSITORY" \
+  --set image.tag="$IMAGE_TAG" \
+  --wait
+
+helm upgrade --install voxchat-frontend helm/charts/frontend \
+  --namespace voxchat \
+  --values "helm/values/$ENVIRONMENT/frontend.yaml" \
+  --set image.repository="$FRONTEND_IMAGE_REPOSITORY" \
+  --set image.tag="$IMAGE_TAG" \
+  --wait
+```
+
+## 17. Rollback
+
+View release history:
+
+```bash
+helm history voxchat-backend -n voxchat
+helm history voxchat-frontend -n voxchat
+```
+
+Rollback backend:
+
+```bash
+helm rollback voxchat-backend <revision> -n voxchat --wait
+```
+
+Rollback frontend:
+
+```bash
+helm rollback voxchat-frontend <revision> -n voxchat --wait
+```
+
+## 18. Useful Operations
 
 Render charts locally:
 
@@ -306,47 +551,30 @@ Render charts locally:
 make helm-template
 ```
 
-Deploy prod values with Helmfile:
+List Helm releases:
 
 ```bash
-export ENVIRONMENT=prod
-export HELMFILE_ENVIRONMENT=prod
-export CLUSTER_NAME="$(terraform -chdir=terraform/environments/dev output -raw cluster_name)"
-export GRAFANA_ADMIN_PASSWORD='replace-with-a-strong-password'
-export BACKEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw backend_repository_url)"
-export FRONTEND_IMAGE_REPOSITORY="$(terraform -chdir=terraform/environments/dev output -raw frontend_repository_url)"
-export IMAGE_TAG="$(git rev-parse HEAD)"
-
-helmfile --environment prod apply
+helm list -A
 ```
 
-View logs:
+View platform logs:
 
 ```bash
-kubectl logs -n voxchat deploy/voxchat-backend
-kubectl logs -n voxchat deploy/voxchat-frontend
-kubectl logs -n external-dns deploy/external-dns
-kubectl logs -n external-secrets deploy/external-secrets
-kubectl logs -n kube-system deploy/aws-load-balancer-controller
+kubectl logs -n external-dns deploy/external-dns --tail=100
+kubectl logs -n external-secrets deploy/external-secrets --tail=100
+kubectl logs -n kube-system deploy/aws-load-balancer-controller --tail=100
 ```
 
-Rollback:
+Describe app resources:
 
 ```bash
-helm history voxchat-backend -n voxchat
-helm rollback voxchat-backend <revision> -n voxchat
-
-helm history voxchat-frontend -n voxchat
-helm rollback voxchat-frontend <revision> -n voxchat
+kubectl describe pod -n voxchat -l app.kubernetes.io/name=backend
+kubectl describe pod -n voxchat -l app.kubernetes.io/name=frontend
+kubectl describe httproute voxchat-backend -n voxchat
+kubectl describe httproute voxchat-frontend -n voxchat
 ```
 
-Destroy app and infrastructure:
-
-```bash
-./scripts/destroy.sh
-```
-
-## 13. Common Failure Checks
+## 19. Common Failure Checks
 
 If pods cannot read secrets:
 
@@ -354,19 +582,20 @@ If pods cannot read secrets:
 kubectl describe externalsecret voxchat-backend -n voxchat
 kubectl describe clustersecretstore aws-secrets-store
 kubectl get secret voxchat-backend-env -n voxchat
+kubectl logs -n external-secrets deploy/external-secrets --tail=100
 ```
 
 If the ALB does not appear:
 
 ```bash
 kubectl describe gateway voxchat-gateway -n voxchat
-kubectl logs -n kube-system deploy/aws-load-balancer-controller
+kubectl logs -n kube-system deploy/aws-load-balancer-controller --tail=100
 ```
 
 If DNS records do not appear:
 
 ```bash
-kubectl logs -n external-dns deploy/external-dns
+kubectl logs -n external-dns deploy/external-dns --tail=100
 kubectl describe httproute voxchat-frontend -n voxchat
 kubectl describe httproute voxchat-backend -n voxchat
 ```
@@ -374,7 +603,49 @@ kubectl describe httproute voxchat-backend -n voxchat
 If migrations fail:
 
 ```bash
+kubectl get jobs -n voxchat
 kubectl logs -n voxchat job/voxchat-backend-schema
 kubectl describe job voxchat-backend-schema -n voxchat
 ```
-aws acm list-certificates --region ap-south-1
+
+If Prisma reports `P1001: Can't reach database server`, apply Terraform again so the RDS security group allows traffic from the EKS node and cluster security groups:
+
+```bash
+terraform -chdir="$TERRAFORM_DIR" apply
+kubectl delete job voxchat-backend-schema -n voxchat --ignore-not-found
+```
+
+
+
+If an image cannot be pulled:
+
+```bash
+kubectl describe pod -n voxchat -l app.kubernetes.io/name=backend
+kubectl describe pod -n voxchat -l app.kubernetes.io/name=frontend
+aws ecr describe-images --repository-name voxchat/backend --region "$AWS_REGION"
+aws ecr describe-images --repository-name voxchat/frontend --region "$AWS_REGION"
+```
+
+## 20. Cleanup
+
+Uninstall app releases:
+
+```bash
+helm uninstall voxchat-frontend -n voxchat
+helm uninstall voxchat-backend -n voxchat
+```
+
+Uninstall platform releases:
+
+```bash
+helm uninstall external-dns -n external-dns
+helm uninstall external-secrets -n external-secrets
+helm uninstall voxchat-monitoring -n monitoring
+helm uninstall aws-load-balancer-controller -n kube-system
+```
+
+Destroy AWS infrastructure only when you really want to remove the environment:
+
+```bash
+terraform -chdir="$TERRAFORM_DIR" destroy
+```

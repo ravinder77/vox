@@ -1,16 +1,4 @@
 apiVersion: gateway.k8s.aws/v1beta1
-kind: TargetGroupConfiguration
-metadata:
-  name: voxchat-gateway-defaults
-  namespace: voxchat
-spec:
-  defaultConfiguration:
-    targetType: ip
-    targetGroupAttributes:
-      - key: deregistration_delay.timeout_seconds
-        value: "60"
----
-apiVersion: gateway.k8s.aws/v1beta1
 kind: LoadBalancerConfiguration
 metadata:
   name: voxchat-gateway-lb
@@ -18,13 +6,12 @@ metadata:
 spec:
   scheme: internet-facing
   ipAddressType: ipv4
-  defaultTargetGroupConfiguration:
-    name: voxchat-gateway-defaults
   tags:
     team: voxchat
     managed-by: gateway-api
   listenerConfigurations:
     - protocolPort: HTTPS:443
+      defaultCertificate: "${ACM_CERTIFICATE_ARN}"
       sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
 ---
 apiVersion: gateway.networking.k8s.io/v1
@@ -53,8 +40,6 @@ spec:
       hostname: "*.voxchat.in"
       port: 443
       protocol: HTTPS
-      tls:
-        mode: Terminate
       allowedRoutes:
         namespaces:
           from: Same
@@ -63,8 +48,6 @@ spec:
       hostname: "voxchat.in"
       port: 443
       protocol: HTTPS
-      tls:
-        mode: Terminate
       allowedRoutes:
         namespaces:
           from: Same

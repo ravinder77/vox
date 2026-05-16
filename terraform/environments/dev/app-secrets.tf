@@ -18,7 +18,7 @@ resource "aws_secretsmanager_secret_version" "backend" {
   secret_id = aws_secretsmanager_secret.backend.id
 
   secret_string = jsonencode({
-    DATABASE_URL     = "postgresql://${jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["username"]}:${urlencode(jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"])}@${module.db.db_instance_address}:${module.db.db_instance_port}/${var.db_name}"
+    DATABASE_URL     = "postgresql://${jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["username"]}:${urlencode(jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"])}@${module.db.db_instance_address}:${module.db.db_instance_port}/${var.db_name}?sslmode=require&uselibpqcompat=true"
     JWT_SECRET       = random_password.jwt_secret.result
     JWT_EXPIRES_IN   = var.jwt_expires_in
     COOKIE_NAME      = var.cookie_name

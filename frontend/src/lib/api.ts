@@ -5,6 +5,7 @@ const DEFAULT_CSRF_COOKIE_NAME = import.meta.env.VITE_CSRF_COOKIE_NAME || 'vox_c
 
 type RequestOptions = RequestInit & {
   headers?: HeadersInit;
+  suppressUnauthorizedEvent?: boolean;
 };
 
 function getCookie(name: string) {
@@ -27,6 +28,7 @@ function getCsrfCookieName() {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
   const method = options.method || 'GET';
+  const { suppressUnauthorizedEvent = false, ...fetchOptions } = options;
   const csrfToken = method === 'GET' || method === 'HEAD' ? '' : getCookie(getCsrfCookieName());
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -36,7 +38,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
       ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
       ...(options.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   const contentType = response.headers.get('content-type') || '';
@@ -45,7 +47,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
     : { success: response.ok, message: response.statusText, data: {} as T };
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && !suppressUnauthorizedEvent) {
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     throw new Error(payload.message || 'Request failed');
@@ -55,8 +57,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<A
 }
 
 export const api = {
-  get<T>(path: string) {
-    return request<T>(path);
+  get<T>(path: string, options?: RequestOptions) {
+    return request<T>(path, options);
   },
 
   post<T, B = unknown>(path: string, body: B) {

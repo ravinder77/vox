@@ -134,7 +134,7 @@ export default function App() {
       const isChatPath =
         window.location.pathname === '/chat' || window.location.pathname.startsWith('/chat/');
       try {
-        const response = await api.get<User>('/auth/me');
+        const response = await api.get<User>('/auth/me', { suppressUnauthorizedEvent: true });
         const isAuthPath = ['/login', '/signup', '/forgot', '/forgot/sent'].includes(window.location.pathname);
 
         if (ignore) {

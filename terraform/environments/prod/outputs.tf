@@ -45,7 +45,7 @@ output "backend_secret_name" {
 
 output "acm_certificate_arn" {
   description = "ACM certificate ARN for voxchat.in"
-  value       = aws_acm_certificate_validation.vox.certificate_arn
+  value       = aws_acm_certificate_validation.voxchat.certificate_arn
 }
 
 output "alb_controller_role_arn" {

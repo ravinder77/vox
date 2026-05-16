@@ -1,0 +1,21 @@
+gatewayClass:
+  name: voxchat-gateway-class
+  controllerName: gateway.k8s.aws/alb
+
+gateway:
+  name: voxchat-gateway
+  hostnames:
+    root: voxchat.in
+    wildcard: "*.voxchat.in"
+  externalDnsHostnames: voxchat.in,api.voxchat.in
+
+loadBalancerConfiguration:
+  name: voxchat-gateway-lb
+  scheme: internet-facing
+  ipAddressType: ipv4
+  sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
+  tags:
+    team: voxchat
+    managed-by: gateway-api
+
+acmCertificateArn: ""
