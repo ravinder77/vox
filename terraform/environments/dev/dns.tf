@@ -8,7 +8,7 @@ resource "aws_route53_zone" "main" {
   tags = var.tags
 }
 
-resource "aws_acm_certificate" "vox" {
+resource "aws_acm_certificate" "voxchat" {
   domain_name               = var.domain_name
   subject_alternative_names = ["*.${var.domain_name}"]
 
@@ -18,27 +18,21 @@ resource "aws_acm_certificate" "vox" {
 
 # Auto-create DNS validation records in Route53
 resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.vox.domain_validation_options :
-    dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
+  for_each = toset([var.domain_name, "*.${var.domain_name}"])
+
   allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
+  name            = one([for dvo in aws_acm_certificate.voxchat.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.key])
+  records         = [one([for dvo in aws_acm_certificate.voxchat.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.key])]
   ttl             = 60
-  type            = each.value.type
+  type            = one([for dvo in aws_acm_certificate.voxchat.domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.key])
   zone_id         = aws_route53_zone.main.zone_id
 }
 
 # Wait for ACM to validate — outputs the final cert ARN
-resource "aws_acm_certificate_validation" "vox" {
-  certificate_arn = aws_acm_certificate.vox.arn
+resource "aws_acm_certificate_validation" "voxchat" {
+  certificate_arn = aws_acm_certificate.voxchat.arn
   validation_record_fqdns = [
     for r in aws_route53_record.cert_validation : r.fqdn
   ]
-  timeouts { create = "10m" }
+  timeouts { create = "45m" }
 }

@@ -25,7 +25,7 @@ provider "aws" {
       Project     = "voxchat"
       Environment = var.environment
       ManagedBy   = "terraform"
-      Repository  = "vox"
+      Repository  = "voxchat"
     }
   }
 }

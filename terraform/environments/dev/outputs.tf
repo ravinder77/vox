@@ -24,6 +24,11 @@ output "route53_zone_id" {
   value = aws_route53_zone.main.zone_id
 }
 
+output "route53_name_servers" {
+  description = "Name servers that must be configured at the domain registrar for ACM DNS validation to work."
+  value       = aws_route53_zone.main.name_servers
+}
+
 output "repository_urls" {
   value = {
     for k, v in aws_ecr_repository.this :

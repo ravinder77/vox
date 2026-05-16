@@ -1,5 +1,5 @@
 terraform {
-  required_version = "1.14.8"
+  required_version = "1.15.3"
 
   required_providers {
     aws = {
@@ -25,7 +25,7 @@ provider "aws" {
       Project     = "voxchat"
       Environment = var.environment
       ManagedBy   = "terraform"
-      Repository  = "vox"
+      Repository  = "voxchat"
     }
   }
 }

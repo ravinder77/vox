@@ -67,8 +67,8 @@ resource "aws_ecr_repository" "this" {
 
 # ── Lifecycle Policy — keep last N images, expire untagged after 7 days ───────
 resource "aws_ecr_lifecycle_policy" "this" {
-  for_each   = aws_ecr_repository.this
-  repository = each.value.name
+  for_each   = local.repositories
+  repository = aws_ecr_repository.this[each.key].name
 
   policy = jsonencode({
     rules = [

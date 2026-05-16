@@ -27,7 +27,7 @@ module "db" {
   port                    = 5432
   publicly_accessible     = false
   multi_az                = var.db_multi_az
-  deletion_protection     = true
+  deletion_protection     = false
   backup_retention_period = 7
   create_db_subnet_group  = true
   subnet_ids              = module.vpc.database_subnets

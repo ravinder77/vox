@@ -21,7 +21,7 @@ Expected versions:
 
 ```bash
 node 24.x
-terraform 1.14.8
+terraform 1.15.3
 helm 4.x
 ```
 

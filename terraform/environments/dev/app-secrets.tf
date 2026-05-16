@@ -8,9 +8,10 @@ resource "random_password" "jwt_secret" {
 }
 
 resource "aws_secretsmanager_secret" "backend" {
-  name        = "${var.project}/${var.environment}/backend"
-  description = "Runtime configuration for the ${var.environment} backend"
-  tags        = local.tags
+  name                    = "${var.project}/${var.environment}/backend"
+  description             = "Runtime configuration for the ${var.environment} backend"
+  recovery_window_in_days = 0
+  tags                    = local.tags
 }
 
 resource "aws_secretsmanager_secret_version" "backend" {
