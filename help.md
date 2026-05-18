@@ -2,7 +2,7 @@
 
 This guide deploys Voxchat to AWS using Terraform, ECR, EKS, Helm, Gateway API, External Secrets Operator, ExternalDNS, and AWS Load Balancer Controller.
 
-Helmfile is not used in this deployment flow. Do not run `./scripts/deploy.sh` for this guide because that script calls `helmfile`.
+Helmfile is not used in this deployment flow. The `./scripts/deploy.sh` helper follows the same Helm-based flow as this guide.
 
 ## 1. Prerequisites
 
@@ -184,7 +184,7 @@ aws route53 get-hosted-zone \
   --output table
 ```
 
-In GoDaddy, set the domain name servers to the Route 53 name servers.
+In GoDaddy or other domain provider, set the domain name servers to the Route 53 name servers.
 
 Wait until delegation is correct:
 
@@ -615,7 +615,11 @@ terraform -chdir="$TERRAFORM_DIR" apply
 kubectl delete job voxchat-backend-schema -n voxchat --ignore-not-found
 ```
 
+If Terraform reports `InvalidPermission.Duplicate` for `aws_vpc_security_group_ingress_rule.eks_to_rds`, move the existing state entry to the new `for_each` address using the security group id from the error message, then apply again:
 
+```bash
+terraform -chdir="$TERRAFORM_DIR" apply
+```
 
 If an image cannot be pulled:
 

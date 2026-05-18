@@ -7,10 +7,8 @@ resource "aws_security_group" "alb" {
 
   name        = "vox-alb-sg"
   description = "ALB Security Group"
-
-  vpc_id = module.vpc.vpc_id
-
-  tags = local.tags
+  vpc_id      = module.vpc.vpc_id
+  tags        = local.tags
 }
 
 
@@ -39,10 +37,8 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
 resource "aws_vpc_security_group_egress_rule" "alb_egress" {
 
   security_group_id = aws_security_group.alb.id
-
-  ip_protocol = "-1"
-
-  cidr_ipv4 = "0.0.0.0/0"
+  ip_protocol       = "-1"
+  cidr_ipv4         = "0.0.0.0/0"
 }
 
 # ------------------------
@@ -52,8 +48,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_egress" {
 resource "aws_security_group" "eks_nodes" {
   name        = "vox-eks-nodes-sg"
   description = "EKS worker node"
-
-  vpc_id = module.vpc.vpc_id
+  vpc_id      = module.vpc.vpc_id
 
   tags = local.tags
 }
@@ -83,11 +78,11 @@ resource "aws_vpc_security_group_egress_rule" "eks_nodes_egress" {
 # ------------------------
 
 locals {
-  rds_client_security_group_ids = toset(compact([
-    aws_security_group.eks_nodes.id,
-    module.eks.node_security_group_id,
-    module.eks.cluster_primary_security_group_id,
-  ]))
+  rds_client_security_group_ids = {
+    local   = aws_security_group.eks_nodes.id
+    node    = module.eks.node_security_group_id
+    cluster = module.eks.cluster_primary_security_group_id
+  }
 }
 
 resource "aws_security_group" "rds" {

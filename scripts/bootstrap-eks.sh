@@ -2,8 +2,23 @@
 
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+
 AWS_REGION="${AWS_REGION:-ap-south-1}"
 CLUSTER_NAME="${CLUSTER_NAME:-voxchat-eks}"
+TERRAFORM_DIR="${TERRAFORM_DIR:-terraform/environments/dev}"
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "Missing required command: $1" >&2
+    exit 1
+  }
+}
+
+need aws
+need helm
+need kubectl
 
 echo "==> 1. Updating kubeconfig"
 aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
@@ -20,21 +35,24 @@ kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f 
 echo "==> 4. Installing ALB controller"
 helm repo add eks https://aws.github.io/eks-charts
 helm repo update
-helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  -n kube-system \
-  --version 1.14.1 \
-  -f helm/values/gateway.yaml \
-  --set clusterName="${CLUSTER_NAME}" \
+
+if [[ -z "${VPC_ID:-}" ]] && command -v terraform >/dev/null 2>&1; then
+  VPC_ID="$(terraform -chdir="${TERRAFORM_DIR}" output -raw vpc_id 2>/dev/null || true)"
+fi
+
+helm_args=(
+  upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller
+  -n kube-system
+  --version 1.14.1
+  -f helm/values/gateway.yaml
+  --set clusterName="${CLUSTER_NAME}"
   --wait
+)
 
-echo "==> 5. Applying GatewayClass"
-kubectl apply -f platform/gateway-api/gatewayclass.yaml
+if [[ -n "${VPC_ID:-}" ]]; then
+  helm_args+=(--set vpcId="${VPC_ID}")
+fi
 
+helm "${helm_args[@]}"
 
-echo "==> 6. Applying Gateway"
-kubectl apply -f platform/gateway-api/gateway.yaml
-
-
-echo "==> ALB address:"
-kubectl get gateway voxchat-gateway -n voxchat \
-  -o jsonpath='{.status.addresses[0].value}'
+echo "==> EKS bootstrap complete"

@@ -56,14 +56,9 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
 
-      - name: Install helmfile
-        run: |
-          curl -fsSL https://github.com/helmfile/helmfile/releases/download/v1.1.9/helmfile_1.1.9_linux_amd64.tar.gz \
-            | tar -xz helmfile
-          sudo mv helmfile /usr/local/bin/helmfile
-
       - name: Deploy
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_sha || github.sha }}
           SKIP_TERRAFORM_APPLY: ${{ github.event_name == 'workflow_run' && 'true' || (inputs.apply_infra == false && 'true' || 'false') }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
         run: ./scripts/deploy.sh

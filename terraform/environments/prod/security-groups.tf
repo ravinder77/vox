@@ -83,11 +83,11 @@ resource "aws_vpc_security_group_egress_rule" "eks_nodes_egress" {
 # ------------------------
 
 locals {
-  rds_client_security_group_ids = toset(compact([
-    aws_security_group.eks_nodes.id,
-    module.eks.node_security_group_id,
-    module.eks.cluster_primary_security_group_id,
-  ]))
+  rds_client_security_group_ids = {
+    local   = aws_security_group.eks_nodes.id
+    node    = module.eks.node_security_group_id
+    cluster = module.eks.cluster_primary_security_group_id
+  }
 }
 
 resource "aws_security_group" "rds" {
