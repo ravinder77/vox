@@ -19,6 +19,12 @@ alertmanager:
 grafana:
   enabled: true
   defaultDashboardsTimezone: browser
+  grafana.ini:
+    server:
+      domain: grafana.voxchat.in
+      root_url: https://grafana.voxchat.in
+    users:
+      allow_sign_up: false
   serviceMonitor:
     enabled: true
   resources:
@@ -36,6 +42,7 @@ prometheus:
     scrapeInterval: 30s
     evaluationInterval: 30s
     serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     resources:
       requests:

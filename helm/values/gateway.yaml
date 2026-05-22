@@ -3,7 +3,7 @@ replicaCount: 1
 clusterName:
 
 region: ap-south-1
-vpcId: vpc-0a55df58139405b3a
+vpcId:
 
 serviceAccount:
   create: true

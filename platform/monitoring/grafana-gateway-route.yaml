@@ -1,0 +1,45 @@
+apiVersion: gateway.k8s.aws/v1beta1
+kind: TargetGroupConfiguration
+metadata:
+  name: voxchat-monitoring-grafana
+  namespace: monitoring
+spec:
+  targetReference:
+    name: voxchat-monitoring-grafana
+  defaultConfiguration:
+    targetType: ip
+    protocol: HTTP
+    healthCheckConfig:
+      healthCheckPath: /api/health
+      healthCheckPort: traffic-port
+      healthCheckProtocol: http
+      healthCheckInterval: 15
+      healthCheckTimeout: 5
+      healthyThresholdCount: 2
+      unhealthyThresholdCount: 2
+      matcher:
+        httpCode: "200"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: grafana.voxchat.in
+spec:
+  parentRefs:
+    - name: voxchat-gateway
+      namespace: voxchat
+      sectionName: https
+  hostnames:
+    - grafana.voxchat.in
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: voxchat-monitoring-grafana
+          port: 80
+          weight: 1

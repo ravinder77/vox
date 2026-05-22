@@ -1,6 +1,6 @@
 # Voxchat AWS Deployment Guide
 
-This guide deploys Voxchat to AWS using Terraform, ECR, EKS, Helm, Gateway API, External Secrets Operator, ExternalDNS, and AWS Load Balancer Controller.
+This guide deploys Voxchat to AWS using Terraform, ECR, EKS, Helm, Gateway API, External Secrets Operator, ExternalDNS, AWS Load Balancer Controller, Prometheus, Grafana, Loki, Promtail, and Alertmanager.
 
 Helmfile is not used in this deployment flow. The `./scripts/deploy.sh` helper follows the same Helm-based flow as this guide.
 
@@ -84,6 +84,7 @@ Open:
 
 ```text
 http://localhost:5173
+http://localhost:4000/metrics
 ```
 
 Stop local containers when finished:
@@ -259,6 +260,8 @@ kubectl create namespace voxchat --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace external-dns --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+kubectl label namespace voxchat voxchat.in/gateway-access=true --overwrite
+kubectl label namespace monitoring voxchat.in/gateway-access=true --overwrite
 ```
 
 ## 10. Install Gateway API CRDs
@@ -296,9 +299,12 @@ kubectl wait --for=condition=established \
 helm repo add eks https://aws.github.io/eks-charts
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns
+helm repo add grafana https://grafana.github.io/helm-charts
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 ```
+
+The `grafana` Helm repository provides the Loki chart used below. Voxchat installs it as the `voxchat-loki` release in the `monitoring` namespace with values from `helm/values/loki-stack.yaml`.
 
 ## 12. Install Platform With Helm
 
@@ -319,7 +325,20 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --wait
 ```
 
-Install monitoring:
+Install Loki and Promtail with the Grafana Loki Helm chart:
+
+```bash
+helm upgrade --install voxchat-loki grafana/loki-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --version 2.10.2 \
+  --values helm/values/loki-stack.yaml \
+  --wait
+```
+
+This chart deploys Loki for log storage and Promtail for log collection. When Loki is installed, add `helm/values/kube-prometheus-stack-loki.yaml` to the kube-prometheus-stack install so Grafana gets a Loki datasource at `http://voxchat-loki:3100`.
+
+Install Prometheus, Grafana, and Alertmanager:
 
 ```bash
 helm upgrade --install voxchat-monitoring prometheus-community/kube-prometheus-stack \
@@ -327,9 +346,12 @@ helm upgrade --install voxchat-monitoring prometheus-community/kube-prometheus-s
   --create-namespace \
   --version 58.x.x \
   --values helm/values/kube-prometheus-stack.yaml \
+  --values helm/values/kube-prometheus-stack-loki.yaml \
   --set grafana.adminPassword="$GRAFANA_ADMIN_PASSWORD" \
   --wait
 ```
+
+When using `./scripts/deploy.sh`, monitoring installs by default only when `ENVIRONMENT=prod`. Set `INSTALL_MONITORING=true` to install Prometheus, Grafana, and Alertmanager in another environment. Set `INSTALL_MONITORING=false` to skip them. Set `INSTALL_LOKI=false` to skip Loki and Promtail while keeping the rest of monitoring enabled; the deploy script will also skip the Loki Grafana datasource overlay.
 
 Install External Secrets Operator:
 
@@ -363,22 +385,8 @@ helm upgrade --install voxchat-gateway helm/charts/gateway \
   --create-namespace \
   --set acmCertificateArn="$ACM_CERTIFICATE_ARN" \
   --wait
-```
 
-The Gateway chart intentionally does not include `spec.listeners[].tls.certificateRefs`. AWS Load Balancer Controller Gateway API support uses the ACM certificate ARN from `LoadBalancerConfiguration.listenerConfigurations[].defaultCertificate`.
-
-If you previously applied the Gateway resources with `kubectl`, Helm may refuse to install because the resources already exist without Helm ownership metadata. For a fresh setup, delete those old resources once and rerun the Helm command:
-
-```bash
-kubectl delete gateway voxchat-gateway -n voxchat --ignore-not-found
-kubectl delete loadbalancerconfiguration voxchat-gateway-lb -n voxchat --ignore-not-found
-kubectl delete gatewayclass voxchat-gateway-class --ignore-not-found
-
-helm upgrade --install voxchat-gateway helm/charts/gateway \
-  --namespace voxchat \
-  --create-namespace \
-  --set acmCertificateArn="$ACM_CERTIFICATE_ARN" \
-  --wait
+kubectl apply -f platform/monitoring/grafana-gateway-route.yaml
 ```
 
 Verify platform resources:
@@ -387,8 +395,11 @@ Verify platform resources:
 kubectl get pods -n kube-system | grep aws-load-balancer-controller
 kubectl get pods -n external-secrets
 kubectl get pods -n external-dns
+kubectl get pods -n monitoring
 kubectl get gatewayclass
 kubectl get gateway -n voxchat
+kubectl get httproute grafana -n monitoring
+kubectl get targetgroupconfiguration voxchat-monitoring-grafana -n monitoring
 ```
 
 ## 14. Deploy App With Helm
@@ -429,6 +440,9 @@ kubectl get httproute -n voxchat
 kubectl get gateway -n voxchat
 kubectl get externalsecret -n voxchat
 kubectl get targetgroupconfiguration -n voxchat
+kubectl get servicemonitor -n voxchat
+kubectl get prometheusrule -n voxchat
+kubectl get httproute grafana -n monitoring
 ```
 
 Check rollout status:
@@ -461,16 +475,29 @@ In another terminal:
 ```bash
 curl http://localhost:4000/health
 curl http://localhost:4000/ready
+curl http://localhost:4000/metrics
 ```
+
+Check monitoring inside the cluster by running each port-forward command in a separate terminal as needed:
+
+```bash
+kubectl port-forward -n monitoring svc/voxchat-monitoring-grafana 3000:80
+kubectl port-forward -n monitoring svc/voxchat-monitoring-prometheus 9090:9090
+kubectl port-forward -n monitoring svc/voxchat-monitoring-alertmanager 9093:9093
+```
+
+Open Grafana at `http://localhost:3000` and log in with `admin` plus `GRAFANA_ADMIN_PASSWORD`. Prometheus should show the `voxchat-backend` target as up, and Grafana should have Prometheus and Loki datasources.
 
 Check public DNS and HTTPS:
 
 ```bash
 dig voxchat.in
 dig api.voxchat.in
+dig grafana.voxchat.in
 curl -I https://voxchat.in
 curl https://api.voxchat.in/health
 curl https://api.voxchat.in/ready
+curl -I https://grafana.voxchat.in/login
 ```
 
 Expected public URLs:
@@ -478,6 +505,7 @@ Expected public URLs:
 ```text
 https://voxchat.in
 https://api.voxchat.in
+https://grafana.voxchat.in
 ```
 
 ## 16. Upgrade App After Code Changes
@@ -563,6 +591,8 @@ View platform logs:
 kubectl logs -n external-dns deploy/external-dns --tail=100
 kubectl logs -n external-secrets deploy/external-secrets --tail=100
 kubectl logs -n kube-system deploy/aws-load-balancer-controller --tail=100
+kubectl logs -n monitoring -l app.kubernetes.io/name=loki --tail=100
+kubectl logs -n monitoring -l app.kubernetes.io/name=promtail --tail=100
 ```
 
 Describe app resources:
@@ -572,6 +602,7 @@ kubectl describe pod -n voxchat -l app.kubernetes.io/name=backend
 kubectl describe pod -n voxchat -l app.kubernetes.io/name=frontend
 kubectl describe httproute voxchat-backend -n voxchat
 kubectl describe httproute voxchat-frontend -n voxchat
+kubectl describe httproute grafana -n monitoring
 ```
 
 ## 19. Common Failure Checks
@@ -598,6 +629,7 @@ If DNS records do not appear:
 kubectl logs -n external-dns deploy/external-dns --tail=100
 kubectl describe httproute voxchat-frontend -n voxchat
 kubectl describe httproute voxchat-backend -n voxchat
+kubectl describe httproute grafana -n monitoring
 ```
 
 If migrations fail:
@@ -613,6 +645,24 @@ If Prisma reports `P1001: Can't reach database server`, apply Terraform again so
 ```bash
 terraform -chdir="$TERRAFORM_DIR" apply
 kubectl delete job voxchat-backend-schema -n voxchat --ignore-not-found
+```
+
+If Prometheus is not scraping the backend:
+
+```bash
+kubectl get servicemonitor -n voxchat
+kubectl describe servicemonitor voxchat-backend -n voxchat
+kubectl get prometheusrule -n voxchat
+kubectl port-forward -n voxchat svc/voxchat-backend-svc 4000:80
+curl http://localhost:4000/metrics
+```
+
+If Loki logs are missing in Grafana:
+
+```bash
+kubectl get pods -n monitoring
+kubectl logs -n monitoring -l app.kubernetes.io/name=loki --tail=100
+kubectl logs -n monitoring -l app.kubernetes.io/name=promtail --tail=100
 ```
 
 If Terraform reports `InvalidPermission.Duplicate` for `aws_vpc_security_group_ingress_rule.eks_to_rds`, move the existing state entry to the new `for_each` address using the security group id from the error message, then apply again:
@@ -645,6 +695,7 @@ Uninstall platform releases:
 helm uninstall external-dns -n external-dns
 helm uninstall external-secrets -n external-secrets
 helm uninstall voxchat-monitoring -n monitoring
+helm uninstall voxchat-loki -n monitoring
 helm uninstall aws-load-balancer-controller -n kube-system
 ```
 

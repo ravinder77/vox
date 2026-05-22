@@ -4,6 +4,10 @@ import type { User } from '@prisma/client';
 import { Server } from 'socket.io';
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
+import {
+  recordRealtimeConnectionClosed,
+  recordRealtimeConnectionOpened,
+} from '../observability/metrics.js';
 import { createMessageForUser } from '../services/message.service.js';
 import { markMessageDeliveredForUser } from '../services/receipt.service.js';
 import { updateTypingForUser } from '../services/typing.service.js';
@@ -201,6 +205,7 @@ export function initializeRealtime(server: HttpServer) {
       transport: socket.conn.transport.name,
     });
     const activeSocketCount = rememberSocketConnection(user.id, socket.id);
+    recordRealtimeConnectionOpened();
     socket.join(userRoom(user.id));
     socket.emit('realtime:ready', { userId: user.id });
 
@@ -327,6 +332,7 @@ export function initializeRealtime(server: HttpServer) {
 
     socket.on('disconnect', (reason) => {
       const remainingSocketCount = forgetSocketConnection(user.id, socket.id);
+      recordRealtimeConnectionClosed();
       console.info('[realtime] socket disconnected', {
         socketId: socket.id,
         userId: user.id,
@@ -354,6 +360,22 @@ export function initializeRealtime(server: HttpServer) {
   });
 
   return io;
+}
+
+export async function closeRealtime() {
+  if (!io) {
+    return;
+  }
+
+  const server = io;
+  io = null;
+
+  try {
+    await server.close();
+  } finally {
+    activeSocketIdsByUserId.clear();
+    presenceBySocketId.clear();
+  }
 }
 
 async function findConversation(conversationId: string) {

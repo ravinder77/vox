@@ -1,58 +1,39 @@
-apiVersion: gateway.k8s.aws/v1beta1
-kind: LoadBalancerConfiguration
-metadata:
-  name: {{ .Values.loadBalancerConfiguration.name | quote }}
-  namespace: {{ .Release.Namespace | quote }}
-  labels:
-    app.kubernetes.io/name: {{ .Chart.Name | quote }}
-    app.kubernetes.io/instance: {{ .Release.Name | quote }}
-    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
-spec:
-  scheme: {{ .Values.loadBalancerConfiguration.scheme | quote }}
-  ipAddressType: {{ .Values.loadBalancerConfiguration.ipAddressType | quote }}
-  tags:
-    {{- toYaml .Values.loadBalancerConfiguration.tags | nindent 4 }}
-  listenerConfigurations:
-    - protocolPort: HTTPS:443
-      defaultCertificate: {{ required "acmCertificateArn is required" .Values.acmCertificateArn | quote }}
-      sslPolicy: {{ .Values.loadBalancerConfiguration.sslPolicy | quote }}
----
+{{- if .Values.gateway.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: {{ .Values.gateway.name | quote }}
+  name: {{ required "gateway.name is required" .Values.gateway.name | quote }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
-    app.kubernetes.io/name: {{ .Chart.Name | quote }}
-    app.kubernetes.io/instance: {{ .Release.Name | quote }}
-    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    {{ include "gateway.labels" . | nindent 4 }}
+  {{- if or .Values.gateway.externalDns.enabled .Values.gateway.annotations }}
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: {{ .Values.gateway.externalDnsHostnames | quote }}
+    {{- if .Values.gateway.externalDns.enabled }}
+    external-dns.alpha.kubernetes.io/hostname: {{ include "gateway.externalDnsHostnames" . | quote }}
+    {{- end }}
+    {{- with .Values.gateway.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
 spec:
-  gatewayClassName: {{ .Values.gatewayClass.name | quote }}
+  gatewayClassName: {{ required "gatewayClass.name is required" .Values.gatewayClass.name | quote }}
+  {{- if .Values.loadBalancerConfiguration.enabled }}
   infrastructure:
     parametersRef:
       group: gateway.k8s.aws
       kind: LoadBalancerConfiguration
-      name: {{ .Values.loadBalancerConfiguration.name | quote }}
+      name: {{ required "loadBalancerConfiguration.name is required" .Values.loadBalancerConfiguration.name | quote }}
+  {{- end }}
   listeners:
-    - name: http
-      port: 80
-      protocol: HTTP
+    {{- range .Values.gateway.listeners }}
+    - name: {{ required "gateway.listeners[].name is required" .name | quote }}
+      {{- with .hostname }}
+      hostname: {{ . | quote }}
+      {{- end }}
+      port: {{ required "gateway.listeners[].port is required" .port }}
+      protocol: {{ required "gateway.listeners[].protocol is required" .protocol }}
       allowedRoutes:
         namespaces:
-          from: Same
-    - name: https
-      hostname: {{ .Values.gateway.hostnames.wildcard | quote }}
-      port: 443
-      protocol: HTTPS
-      allowedRoutes:
-        namespaces:
-          from: Same
-    - name: https-root
-      hostname: {{ .Values.gateway.hostnames.root | quote }}
-      port: 443
-      protocol: HTTPS
-      allowedRoutes:
-        namespaces:
-          from: Same
+          {{- toYaml (default $.Values.gateway.allowedRouteNamespaces .allowedRouteNamespaces) | nindent 10 }}
+    {{- end }}
+{{- end }}

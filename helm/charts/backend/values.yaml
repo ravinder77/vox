@@ -84,6 +84,38 @@ readinessProbe:
     path: /ready
     port: http
 
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  labels: {}
+
+prometheusRule:
+  enabled: false
+  labels: {}
+  rules:
+    - alert: VoxchatBackendDown
+      expr: up{job="voxchat-backend"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: Voxchat backend is down
+        description: Prometheus has not been able to scrape the backend for more than 1 minute.
+    - alert: VoxchatBackendHighErrorRate
+      expr: |
+        sum(rate(voxchat_http_requests_total{job="voxchat-backend",status_code=~"5.."}[5m]))
+          /
+        clamp_min(sum(rate(voxchat_http_requests_total{job="voxchat-backend"}[5m])), 1)
+          > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Voxchat backend 5xx rate is above 5%
+        description: More than 5% of backend HTTP requests are returning 5xx responses.
+
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:
   enabled: true

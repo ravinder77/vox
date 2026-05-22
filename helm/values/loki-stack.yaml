@@ -1,0 +1,51 @@
+loki:
+  enabled: true
+  config:
+    memberlist:
+      advertise_addr: ${POD_IP}
+      join_members:
+        - '{{ include "loki.fullname" . }}-memberlist'
+  extraArgs:
+    config.expand-env: true
+  env:
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+promtail:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+grafana:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+fluent-bit:
+  enabled: false
+
+filebeat:
+  enabled: false
+
+logstash:
+  enabled: false
+
+test_pod:
+  enabled: false

@@ -7,7 +7,7 @@ cd "${ROOT_DIR}"
 
 AWS_REGION="${AWS_REGION:-ap-south-1}"
 CLUSTER_NAME="${CLUSTER_NAME:-voxchat-eks}"
-TERRAFORM_DIR="${TERRAFORM_DIR:-terraform/environments/dev}"
+TERRAFORM_DIR="${TERRAFORM_DIR:-terraform/environments/prod}"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -31,6 +31,8 @@ kubectl create namespace voxchat --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace external-dns --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+kubectl label namespace voxchat voxchat.in/gateway-access=true --overwrite
+kubectl label namespace monitoring voxchat.in/gateway-access=true --overwrite
 
 echo "==> 4. Installing ALB controller"
 helm repo add eks https://aws.github.io/eks-charts

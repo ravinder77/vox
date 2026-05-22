@@ -1,21 +1,49 @@
 gatewayClass:
-  name: voxchat-gateway-class
+  enabled: true
+  name: aws
   controllerName: gateway.k8s.aws/alb
 
 gateway:
+  enabled: true
   name: voxchat-gateway
-  hostnames:
-    root: voxchat.in
-    wildcard: "*.voxchat.in"
-  externalDnsHostnames: voxchat.in,api.voxchat.in
+  annotations: {}
+  externalDns:
+    enabled: true
+    hostnames:
+      - voxchat.in
+      - api.voxchat.in
+  allowedRouteNamespaces:
+    from: Selector
+    selector:
+      matchLabels:
+        voxchat.in/gateway-access: "true"
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+    - name: https
+      hostname: "*.voxchat.in"
+      port: 443
+      protocol: HTTPS
+    - name: https-root
+      hostname: voxchat.in
+      port: 443
+      protocol: HTTPS
 
 loadBalancerConfiguration:
+  enabled: true
   name: voxchat-gateway-lb
+  annotations: {}
   scheme: internet-facing
   ipAddressType: ipv4
   sslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
   tags:
     team: voxchat
     managed-by: gateway-api
+  loadBalancerAttributes:
+    - key: routing.http2.enabled
+      value: "true"
+    - key: idle_timeout.timeout_seconds
+      value: "120"
 
 acmCertificateArn: ""

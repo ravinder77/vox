@@ -1,12 +1,5 @@
-resource "aws_iam_openid_connect_provider" "github" {
+data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
-  thumbprint_list = [
-    "6938fd4d98bab03faadb97b34396831e3780aea1"
-  ]
-  tags = var.tags
 }
 
 data "aws_iam_policy_document" "github_actions_assume" {
@@ -15,7 +8,7 @@ data "aws_iam_policy_document" "github_actions_assume" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
     }
     condition {
       test     = "StringEquals"
@@ -141,10 +134,12 @@ resource "aws_iam_role_policy_attachment" "external_dns" {
 }
 
 resource "aws_eks_pod_identity_association" "external_dns" {
-  cluster_name    = var.eks_cluster_name
+  cluster_name    = module.eks.cluster_name
   namespace       = "external-dns"
   service_account = "external-dns"
   role_arn        = aws_iam_role.external_dns.arn
+
+  depends_on = [module.eks]
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -167,11 +162,13 @@ resource "aws_iam_role_policy_attachment" "alb_controller" {
 }
 
 resource "aws_eks_pod_identity_association" "alb_controller" {
-  cluster_name    = var.eks_cluster_name
+  cluster_name    = module.eks.cluster_name
   namespace       = "kube-system"
   service_account = "aws-load-balancer-controller"
 
   role_arn = aws_iam_role.alb_controller.arn
+
+  depends_on = [module.eks]
 }
 
 # ─────────────────────────────────────────────────────────────
@@ -226,10 +223,12 @@ resource "aws_iam_role_policy_attachment" "external_secrets" {
 }
 
 resource "aws_eks_pod_identity_association" "external_secrets" {
-  cluster_name    = var.eks_cluster_name
+  cluster_name    = module.eks.cluster_name
   namespace       = "external-secrets"
   service_account = "external-secrets"
   role_arn        = aws_iam_role.external_secrets.arn
+
+  depends_on = [module.eks]
 }
 
 
@@ -239,18 +238,22 @@ resource "aws_eks_pod_identity_association" "external_secrets" {
 # ─────────────────────────────────────────────────────────────
 
 resource "aws_eks_access_entry" "github_actions" {
-  cluster_name  = var.eks_cluster_name
+  cluster_name  = module.eks.cluster_name
   principal_arn = aws_iam_role.github_actions.arn
   type          = "STANDARD"
   tags          = var.tags
+
+  depends_on = [module.eks]
 }
 
 resource "aws_eks_access_policy_association" "github_actions" {
-  cluster_name  = var.eks_cluster_name
+  cluster_name  = module.eks.cluster_name
   principal_arn = aws_iam_role.github_actions.arn
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 
   access_scope {
     type = "cluster"
   }
+
+  depends_on = [module.eks]
 }

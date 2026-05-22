@@ -9,7 +9,12 @@ TERRAFORM_DIR="${TERRAFORM_DIR:-terraform/environments/dev}"
 AWS_REGION="${AWS_REGION:-ap-south-1}"
 ENVIRONMENT="${ENVIRONMENT:-$(basename "${TERRAFORM_DIR}")}"
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse HEAD)}"
-INSTALL_MONITORING="${INSTALL_MONITORING:-true}"
+DEFAULT_INSTALL_MONITORING=false
+if [[ "${ENVIRONMENT}" == "prod" ]]; then
+  DEFAULT_INSTALL_MONITORING=true
+fi
+INSTALL_MONITORING="${INSTALL_MONITORING:-${DEFAULT_INSTALL_MONITORING}}"
+INSTALL_LOKI="${INSTALL_LOKI:-${INSTALL_MONITORING}}"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -55,15 +60,42 @@ aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_REGION}"
 
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
+
+if [[ "${INSTALL_LOKI}" == "true" ]]; then
+  helm repo add grafana https://grafana.github.io/helm-charts
+fi
 
 if [[ "${INSTALL_MONITORING}" == "true" ]]; then
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+fi
+
+helm repo update
+
+if [[ "${INSTALL_LOKI}" == "true" ]]; then
+  helm upgrade --install voxchat-loki grafana/loki-stack \
+    --namespace monitoring \
+    --create-namespace \
+    --version 2.10.2 \
+    --values helm/values/loki-stack.yaml \
+    --wait
+fi
+
+if [[ "${INSTALL_MONITORING}" == "true" ]]; then
+  monitoring_values=(
+    --values helm/values/kube-prometheus-stack.yaml
+  )
+
+  if [[ "${INSTALL_LOKI}" == "true" ]]; then
+    monitoring_values+=(
+      --values helm/values/kube-prometheus-stack-loki.yaml
+    )
+  fi
+
   helm upgrade --install voxchat-monitoring prometheus-community/kube-prometheus-stack \
     --namespace monitoring \
     --create-namespace \
     --version 58.x.x \
-    --values helm/values/kube-prometheus-stack.yaml \
+    "${monitoring_values[@]}" \
     --set grafana.adminPassword="${GRAFANA_ADMIN_PASSWORD}" \
     --wait
 fi
@@ -89,6 +121,10 @@ helm upgrade --install voxchat-gateway helm/charts/gateway \
   --create-namespace \
   --set acmCertificateArn="${ACM_CERTIFICATE_ARN}" \
   --wait
+
+if [[ "${INSTALL_MONITORING}" == "true" ]]; then
+  kubectl apply -f platform/monitoring/grafana-gateway-route.yaml
+fi
 
 kubectl delete job voxchat-backend-schema -n voxchat --ignore-not-found
 

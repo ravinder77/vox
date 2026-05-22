@@ -1,10 +1,10 @@
+{{- if .Values.gatewayClass.enabled -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
-  name: {{ .Values.gatewayClass.name | quote }}
+  name: {{ required "gatewayClass.name is required" .Values.gatewayClass.name | quote }}
   labels:
-    app.kubernetes.io/name: {{ .Chart.Name | quote }}
-    app.kubernetes.io/instance: {{ .Release.Name | quote }}
-    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    {{- include "gateway.labels" . | nindent 4 }}
 spec:
-  controllerName: {{ .Values.gatewayClass.controllerName | quote }}
+  controllerName: {{ required "gatewayClass.controllerName is required" .Values.gatewayClass.controllerName | quote }}
+{{- end }}

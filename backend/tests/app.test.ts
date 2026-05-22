@@ -35,6 +35,27 @@ describe('backend app', () => {
     );
   });
 
+  it('exposes Prometheus metrics from /metrics', async () => {
+    await request(app).get('/health');
+
+    const response = await request(app).get('/metrics');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['content-type']).toContain('text/plain');
+    expect(response.text).toContain('voxchat_http_requests_total');
+    expect(response.text).toContain('voxchat_realtime_connections');
+  });
+
+  it('uses a bounded metrics route label for unmatched requests', async () => {
+    await request(app).get('/does-not-exist');
+
+    const response = await request(app).get('/metrics');
+
+    expect(response.status).toBe(200);
+    expect(response.text).toContain('route="not_found"');
+    expect(response.text).not.toContain('route="/does-not-exist"');
+  });
+
   it('rejects forgot-password requests with invalid email', async () => {
     const response = await request(app)
       .post('/api/auth/forgot-password')

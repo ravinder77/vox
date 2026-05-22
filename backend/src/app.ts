@@ -5,9 +5,14 @@ import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
+import { metricsHandler, metricsMiddleware } from './observability/metrics.js';
 import apiRoutes from './routes/index.js';
 
-export function createApp() {
+type AppOptions = {
+  isShuttingDown?: () => boolean;
+};
+
+export function createApp(options: AppOptions = {}) {
   const app = express();
   app.set('etag', false);
 
@@ -20,6 +25,9 @@ export function createApp() {
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
   app.use(morgan('dev'));
+  app.use(metricsMiddleware);
+
+  app.get('/metrics', metricsHandler);
 
   app.get('/health', (_req: Request, res: Response) => {
     res.json({
@@ -33,6 +41,17 @@ export function createApp() {
   });
 
   app.get('/ready', (_req: Request, res: Response) => {
+    if (options.isShuttingDown?.()) {
+      res.status(503).json({
+        success: false,
+        message: 'Vox backend is shutting down',
+        data: {
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+
     res.json({
       success: true,
       message: 'Vox backend is ready',

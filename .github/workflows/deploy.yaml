@@ -61,4 +61,14 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag || github.event.workflow_run.head_sha || github.sha }}
           SKIP_TERRAFORM_APPLY: ${{ github.event_name == 'workflow_run' && 'true' || (inputs.apply_infra == false && 'true' || 'false') }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
-        run: ./scripts/deploy.sh
+          DEPLOY_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          if [[ "${DEPLOY_BRANCH}" == "main" ]]; then
+            export ENVIRONMENT=prod
+            export TERRAFORM_DIR=terraform/environments/prod
+          else
+            export ENVIRONMENT=dev
+            export TERRAFORM_DIR=terraform/environments/dev
+          fi
+
+          ./scripts/deploy.sh

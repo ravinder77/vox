@@ -1,0 +1,7 @@
+grafana:
+  additionalDataSources:
+    - name: Loki
+      uid: Loki
+      type: loki
+      access: proxy
+      url: http://voxchat-loki:3100

@@ -27,7 +27,7 @@ The app is intentionally broader than a UI prototype. It includes a React fronte
 | Testing | Jest, Supertest, Vitest, Testing Library |
 | Local runtime | Docker Compose, Make |
 | Infrastructure | Terraform, AWS VPC, EKS, ECR, RDS, Route 53, ACM |
-| Kubernetes | Helm, Gateway API, AWS Load Balancer Controller, External Secrets, ExternalDNS, Prometheus/Grafana |
+| Kubernetes | Helm, Gateway API, AWS Load Balancer Controller, External Secrets, ExternalDNS, Prometheus/Grafana, Loki, Alertmanager |
 | CI/CD | GitHub Actions, Docker Buildx, Trivy, Syft, Cosign, SonarQube |
 
 ## Repository Layout
@@ -55,6 +55,7 @@ Default local URLs:
 Frontend: http://localhost:5173
 Backend:  http://localhost:4000
 Health:   http://localhost:4000/health
+Metrics:  http://localhost:4000/metrics
 ```
 
 The seeded demo password is:
@@ -149,9 +150,10 @@ High-level deployment flow:
 1. Terraform provisions VPC, EKS, RDS, ECR, Route 53, ACM, IAM, and secrets.
 2. Docker images are built and pushed to ECR.
 3. Helm installs platform components and app charts.
-4. Gateway API and AWS Load Balancer Controller expose `voxchat.in` and `api.voxchat.in`.
+4. Gateway API and AWS Load Balancer Controller expose `voxchat.in`, `api.voxchat.in`, and `grafana.voxchat.in`.
 5. External Secrets reads backend runtime secrets from AWS Secrets Manager.
 6. ExternalDNS manages Route 53 DNS records.
+7. In prod, Prometheus, Grafana, Loki, Promtail, and Alertmanager are installed into the `monitoring` namespace with Helm.
 
 Useful deployment helper:
 
@@ -167,6 +169,8 @@ If infrastructure already exists:
 ```bash
 SKIP_TERRAFORM_APPLY=true ./scripts/deploy.sh
 ```
+
+Monitoring installs by default only when `ENVIRONMENT=prod`. Set `INSTALL_MONITORING=true` for another environment, `INSTALL_MONITORING=false` to skip Prometheus/Grafana/Alertmanager, or `INSTALL_LOKI=false` to skip Loki/Promtail while keeping the rest of the monitoring stack.
 
 The detailed AWS runbook is in [help.md](help.md).
 

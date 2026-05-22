@@ -1,0 +1,26 @@
+{{- if .Values.loadBalancerConfiguration.enabled -}}
+apiVersion: gateway.k8s.aws/v1beta1
+kind: LoadBalancerConfiguration
+metadata:
+  name: {{ required "loadBalancerConfiguration.name is required" .Values.loadBalancerConfiguration.name | quote }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "gateway.labels" . | nindent 4 }}
+  {{- with .Values.loadBalancerConfiguration.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  scheme: {{ .Values.loadBalancerConfiguration.scheme | quote }}
+  ipAddressType: {{ .Values.loadBalancerConfiguration.ipAddressType | quote }}
+  tags:
+    {{- toYaml .Values.loadBalancerConfiguration.tags | nindent 4 }}
+  listenerConfigurations:
+    - protocolPort: HTTPS:443
+      defaultCertificate: {{ required "acmCertificateArn is required" .Values.acmCertificateArn | quote }}
+      sslPolicy: {{ .Values.loadBalancerConfiguration.sslPolicy | quote }}
+  {{- with .Values.loadBalancerConfiguration.loadBalancerAttributes }}
+  loadBalancerAttributes:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
